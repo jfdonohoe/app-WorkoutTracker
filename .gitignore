@@ -1,0 +1,37 @@
+# macOS
+.DS_Store
+
+# Xcode user-specific files
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# Build products
+build/
+DerivedData/
+
+# Swift Package Manager
+.swiftpm/
+.build/
+Packages/
+Package.resolved
+
+# CocoaPods, if you ever use it
+Pods/
+
+# Fastlane, if you ever use it
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
+
+# Secrets and local config
+.env
+.env.*
+*.pem
+*.p12
+*.mobileprovision
+*.provisionprofile
+
+# Claude or local notes you may not want in Git
+.claude/

@@ -10,9 +10,10 @@
 //     button.
 //   • Completing a set collapses it to a one-line row (weight × reps + check) and
 //     scrolls down to the next set. Tapping a completed row reopens it to edit.
-//   • The Complete-Set button slot doubles as the rest timer: while resting it
-//     shows a countdown with a progress fill; when the timer ends it shows "GO!"
-//     for 3 seconds, then becomes a functional Complete Set button.
+//   • The Complete-Set button slot doubles as the rest timer: it keeps the SAME
+//     prominent-button shape throughout. While resting it shows a countdown with
+//     the accent fill revealed left-to-right over a darker track; when the timer
+//     expires or is skipped it morphs into the functional Complete Set button.
 //
 //  Title is just the exercise name — no dropdown.
 //
@@ -39,8 +40,6 @@ struct SessionExerciseSheet: View {
     @State private var draftReps: [UUID: Int] = [:]
     @State private var editingSetting: SessionMachineSetting?
     @State private var showAddSetting = false
-    @State private var goActive = false
-    @State private var goTask: Task<Void, Never>?
     @State private var didEdit = false
     @State private var showUpdatePrompt = false
     @State private var definition: Exercise?
@@ -109,9 +108,6 @@ struct SessionExerciseSheet: View {
                 }
             }
             .onAppear { syncDrafts(); loadDefinition() }
-            .onChange(of: restTimer.isFinished) { _, finished in
-                if finished { beginGoWindow() }
-            }
             .confirmationDialog("Apply the new reps/weights to…",
                                 isPresented: $showUpdatePrompt, titleVisibility: .visible) {
                 Button("This workout only") { finishExercise() }
@@ -313,24 +309,25 @@ struct SessionExerciseSheet: View {
         if isLocked {
             EmptyView()
         } else if restTimer.isRunning {
-            // Resting: show countdown with a progress fill across the slot.
+            // Resting: SAME button shape as Complete Set, with the accent fill
+            // revealed left-to-right over a darker track as time elapses.
             // Tap to skip the rest and make Complete Set available immediately.
             VStack(spacing: 4) {
-                RestFillView(progress: restTimer.progress, text: "Rest \(restTimer.formattedRemaining)")
-                    .contentShape(Rectangle())
-                    .onTapGesture { skipRest() }
+                Button { skipRest() } label: {
+                    SetActionButtonLabel(title: "Rest \(restTimer.formattedRemaining)",
+                                         progress: restTimer.progress)
+                }
+                .buttonStyle(.plain)
                 Text("Tap to skip rest").font(.caption2).foregroundStyle(.secondary)
             }
-        } else if goActive {
-            // Brief "GO!" state before the button becomes functional.
-            RestFillView(progress: 1, text: "GO!", fill: .green)
         } else {
+            // Timer expired or skipped: the action button for the next set.
             Button {
                 complete(set, proxy: proxy)
             } label: {
-                BigActionLabel(title: "Complete Set", systemImage: "checkmark.circle.fill")
+                SetActionButtonLabel(title: "Complete Set", systemImage: "checkmark.circle.fill")
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.plain)
         }
     }
 
@@ -374,8 +371,6 @@ struct SessionExerciseSheet: View {
         if w != set.plannedWeight || r != set.plannedReps { didEdit = true }
         repo.completeSet(set, in: session, actualWeight: w, actualReps: r)
         try? context.save()
-        goActive = false
-        goTask?.cancel()
 
         if let next = exercise.orderedSets.first(where: { !$0.isCompleted }) {
             // Between-sets cooldown uses the session-level setting.
@@ -423,24 +418,9 @@ struct SessionExerciseSheet: View {
         try? context.save()
     }
 
-    /// Skip the remaining rest: stop the timer and make Complete Set available.
+    /// Skip the remaining rest: stop the timer so the Complete Set button shows.
     private func skipRest() {
-        goTask?.cancel()
-        goActive = false
         restTimer.reset()
-    }
-
-    /// Start the 3-second "GO!" window, then make the button functional.
-    private func beginGoWindow() {
-        goTask?.cancel()
-        goActive = true
-        goTask = Task {
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            if !Task.isCancelled {
-                goActive = false
-                restTimer.reset()
-            }
-        }
     }
 
     /// Machine settings always save to the shared machine definition (everywhere)
@@ -455,27 +435,50 @@ struct SessionExerciseSheet: View {
     }
 }
 
-/// A non-interactive "button-shaped" view that fills horizontally with a
-/// progress color — used for the rest countdown and the "GO!" flash.
-struct RestFillView: View {
-    var progress: Double
-    var text: String
-    var fill: Color = .accentColor
+/// The big primary set button. It keeps ONE shape in every state so the rest
+/// countdown and the Complete Set action look identical except for the progress
+/// reveal:
+///   • `progress == nil` → a solid accent action button (e.g. "Complete Set").
+///   • `progress` set (0...1) → the between-reps rest countdown: a BRIGHT yellow
+///     fill is revealed left-to-right (a hard mask edge) over a DARK yellow track,
+///     advancing as time elapses.
+struct SetActionButtonLabel: View {
+    var title: String
+    var systemImage: String? = nil
+    /// nil = solid action button. 0...1 = rest countdown reveal.
+    var progress: Double? = nil
+    var tint: Color = .accentColor
+
+    /// Rest-countdown colors.
+    private static let darkYellow = Color(red: 0.60, green: 0.47, blue: 0.0)
+    private static let brightYellow = Color(red: 1.0, green: 0.84, blue: 0.0)
+
+    private let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemFill))
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(fill.opacity(0.45))
-                    .frame(width: geo.size.width * min(max(progress, 0), 1))
-                Text(text)
-                    .font(.title3.bold())
-                    .frame(maxWidth: .infinity)
+        ZStack {
+            if let progress {
+                // Dark yellow track…
+                shape.fill(Self.darkYellow)
+                // …with the bright yellow fill revealed across it as time elapses.
+                GeometryReader { geo in
+                    shape.fill(Self.brightYellow)
+                        .mask(alignment: .leading) {
+                            Rectangle()
+                                .frame(width: geo.size.width * min(max(progress, 0), 1))
+                        }
+                }
+                .animation(.linear(duration: 0.25), value: progress)
+            } else {
+                shape.fill(tint)
             }
+
+            BigActionLabel(title: title, systemImage: systemImage)
+                .foregroundStyle(progress == nil ? .white : .black)
         }
-        .frame(height: 50)
-        .animation(.linear(duration: 0.25), value: progress)
+        .frame(maxWidth: .infinity, minHeight: 50)
+        .clipShape(shape)
+        .contentShape(shape)
     }
 }
 

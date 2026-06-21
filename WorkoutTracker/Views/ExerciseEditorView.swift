@@ -2,17 +2,22 @@
 //  ExerciseEditorView.swift
 //  WorkoutTracker
 //
-//  Create/edit a library Exercise with its FULL default prescription: name,
-//  optional machine + settings, default sets (per-set reps/weight), and default
-//  cooldown. The same name can exist many times with different defaults.
+//  Create/edit a library Exercise: name, group, the group's default
+//  prescription (strength = per-set reps/weight, cardio = duration/intensity,
+//  stretching = hold/sides/rounds), an optional machine + up to 4 shared
+//  settings, a reference photo (strength/cardio), and notes.
 //
-//  Used by the Settings ▸ Exercises library, the routine builder's picker, and
-//  the in-workout "Add exercise" flow.
+//  WHY this is presented as a SHEET (see ExerciseLibraryView):
+//  A `ForEach` over a @State value array (the per-set list, the settings list)
+//  drove a 125% CPU render loop that froze this screen when it was PUSHED onto
+//  Settings' stack with no NavigationStack of its own. Presented as
+//  `.sheet { NavigationStack { … } }` (like SetBuilderSheet / RoutineListView's
+//  new-routine editor), those @State ForEach lists behave. Uses Cancel/Save
+//  because a sheet has no back button.
 //
 
 import SwiftUI
 import SwiftData
-import PhotosUI
 import UIKit
 
 struct ExerciseEditorView: View {
@@ -20,6 +25,8 @@ struct ExerciseEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
     var existing: Exercise?
+    /// When creating from a routine grouping, lock the new exercise to that group.
+    var forcedGroup: SectionType? = nil
 
     @State private var name = ""
     @State private var notes = ""
@@ -35,18 +42,23 @@ struct ExerciseEditorView: View {
     @State private var holdSeconds = 30
     @State private var sides = 1
     @State private var rounds = 1
-    @State private var showDeleteConfirm = false
+    // Photo
     @State private var photoData: Data?
-    @State private var photoItem: PhotosPickerItem?
+    @State private var showLibrary = false
     @State private var showCamera = false
+    @State private var showDeleteConfirm = false
     @State private var didLoad = false
-    @State private var touched = false        // new-exercise: any field edited
-    @State private var showLeaveConfirm = false
 
-    init(existing: Exercise? = nil) { self.existing = existing }
+    init(existing: Exercise? = nil, forcedGroup: SectionType? = nil) {
+        self.existing = existing
+        self.forcedGroup = forcedGroup
+    }
 
     private var isNew: Bool { existing == nil }
+    /// Stretching has no machine and no photo.
+    private var allowsPhoto: Bool { group != .stretching }
 
+    struct SetDraft: Identifiable, Equatable { let id = UUID(); var reps: Int; var weight: Double }
     struct SettingDraft: Identifiable, Equatable {
         let id = UUID()
         var label = ""
@@ -55,39 +67,59 @@ struct ExerciseEditorView: View {
         var other = ""
         var isEmpty: Bool { label.trimmingCharacters(in: .whitespaces).isEmpty }
     }
-    struct SetDraft: Identifiable, Equatable { let id = UUID(); var reps: Int; var weight: Double }
 
     var body: some View {
-        Form {
-            exerciseSection
-            groupSections
-            // Photo & notes sit directly above the delete button.
-            // (Strength & cardio include a photo; stretching is notes-only.)
-            photoNotesSection
-            deleteSection
-        }
-        .navigationTitle(isNew ? "New Exercise" : "Edit Exercise")
-        .navigationBarBackButtonHidden(true)
-        .toolbar {
-            // Custom Back: new exercise confirms unsaved edits; editing commits
-            // on the way out (no Save button, and no per-change writes that would
-            // churn the library's @Query and loop).
-            ToolbarItem(placement: .topBarLeading) {
-                Button { backTapped() } label: { Label("Back", systemImage: "chevron.left") }
+        List {
+            Section("Exercise") {
+                TextField("Name (e.g. Leg Press)", text: $name)
+                if isNew && forcedGroup == nil {
+                    Picker("Group", selection: $group) {
+                        Text(SectionType.strength.displayName).tag(SectionType.strength)
+                        Text(SectionType.cardio.displayName).tag(SectionType.cardio)
+                        Text(SectionType.stretching.displayName).tag(SectionType.stretching)
+                    }
+                } else {
+                    // Locked: editing keeps the existing group; creating from a
+                    // routine grouping is fixed to that group.
+                    HStack { Text("Group"); Spacer(); Text(group.displayName).foregroundStyle(.secondary) }
+                }
             }
-            if isNew {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }.disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+
+            groupSections
+
+            if allowsPhoto { photoSection }
+
+            Section("Notes") {
+                TextField("Notes", text: $notes, axis: .vertical)
+            }
+
+            if !isNew {
+                Section {
+                    Button(role: .destructive) { showDeleteConfirm = true } label: {
+                        Label("Delete exercise", systemImage: "trash").frame(maxWidth: .infinity)
+                    }
                 }
             }
         }
+        .listStyle(.insetGrouped)
+        .navigationTitle(isNew ? "New Exercise" : "Edit Exercise")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") { save() }
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
         .onAppear(perform: load)
-        // Track edits (for new-exercise dirty state). Photo changes call
-        // fieldChanged() directly.
-        .onChange(of: changeToken) { _, _ in fieldChanged() }
-        .confirmationDialog("Leave without saving?", isPresented: $showLeaveConfirm, titleVisibility: .visible) {
-            Button("Leave without saving", role: .destructive) { dismiss() }
-            Button("Keep editing", role: .cancel) {}
+        .sheet(isPresented: $showLibrary) {
+            PhotoLibraryPicker { data in photoData = data }
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPicker { image in photoData = image.jpegData(compressionQuality: 0.8) }
+                .ignoresSafeArea()
         }
         .confirmationDialog("Delete this exercise?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Delete exercise", role: .destructive) {
@@ -98,120 +130,60 @@ struct ExerciseEditorView: View {
         } message: {
             Text("It will be removed from your library. Past workouts that used it are unaffected.")
         }
-        .onChange(of: photoItem) { _, newItem in
-            guard let newItem else { return }
-            Task {
-                if let data = try? await newItem.loadTransferable(type: Data.self) {
-                    photoData = data
-                    fieldChanged()
-                }
-            }
-        }
-        .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker { image in
-                photoData = image.jpegData(compressionQuality: 0.8)
-                fieldChanged()
-            }
-            .ignoresSafeArea()
-        }
     }
 
-    // MARK: - Top-level sections (split out to keep the body type-checkable)
-
-    private var exerciseSection: some View {
-        Section("Exercise") {
-            TextField("Name (e.g. Leg Press)", text: $name)
-            if isNew {
-                Picker("Group", selection: $group) {
-                    ForEach(SectionType.allCases) { Text($0.displayName).tag($0) }
-                }
-            } else {
-                // Group can't change after creation (each group has its own
-                // definition shape).
-                HStack { Text("Group"); Spacer(); Text(group.displayName).foregroundStyle(.secondary) }
-            }
-        }
-    }
+    // MARK: - Group-specific sections
 
     @ViewBuilder
     private var groupSections: some View {
         switch group {
         case .strength:
-            strengthSetsSection
+            Section("Default sets") {
+                ForEach(Array(sets.enumerated()), id: \.element.id) { index, _ in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Set \(index + 1)").font(.subheadline.bold())
+                        Stepper("Weight: \(Int(sets[index].weight)) lb",
+                                value: $sets[index].weight, in: 0...2000, step: 5)
+                        Stepper("Reps: \(sets[index].reps)",
+                                value: $sets[index].reps, in: 1...100)
+                    }
+                    .padding(.vertical, 2)
+                }
+                .onDelete { offsets in
+                    sets.remove(atOffsets: offsets)
+                    if sets.isEmpty { sets = [SetDraft(reps: 10, weight: 0)] }
+                }
+                Button {
+                    let last = sets.last ?? SetDraft(reps: 10, weight: 0)
+                    sets.append(SetDraft(reps: last.reps, weight: last.weight))
+                } label: { Label("Add set (copies last)", systemImage: "plus.circle") }
+            }
             machineSection
         case .cardio:
-            cardioSection
+            Section("Cardio") {
+                Stepper("Duration: \(durationMinutes) min", value: $durationMinutes, in: 1...300, step: 5)
+                Picker("Intensity", selection: $intensity) {
+                    Text(CardioIntensity.low.displayName).tag(CardioIntensity.low)
+                    Text(CardioIntensity.moderate.displayName).tag(CardioIntensity.moderate)
+                    Text(CardioIntensity.high.displayName).tag(CardioIntensity.high)
+                }
+            }
             machineSection
         case .stretching:
-            stretchSection
-        }
-    }
-
-    @ViewBuilder
-    private var deleteSection: some View {
-        if !isNew {
-            Section {
-                Button(role: .destructive) { showDeleteConfirm = true } label: {
-                    Label("Delete exercise", systemImage: "trash").frame(maxWidth: .infinity)
-                }
+            Section("Stretching") {
+                Stepper("Hold: \(holdSeconds)s", value: $holdSeconds, in: 1...600, step: 5)
+                Stepper("Sides: \(sides)", value: $sides, in: 1...2)
+                Stepper("Rounds: \(rounds)", value: $rounds, in: 1...20)
             }
-        }
-    }
-
-    /// A single value summarizing every editable field, so one .onChange can
-    /// drive auto-save / dirty tracking. (Photo handled separately.)
-    private var changeToken: String {
-        let setsKey = sets.map { "\($0.reps)x\(Int($0.weight))" }.joined(separator: ",")
-        let settingsKey = settings.map { "\($0.label):\($0.useOther):\($0.numeric):\($0.other)" }.joined(separator: ",")
-        return [name, group.rawValue, "\(isMachine)", machineName, notes,
-                "\(durationMinutes)", intensity.rawValue, "\(holdSeconds)", "\(sides)", "\(rounds)",
-                setsKey, settingsKey].joined(separator: "|")
-    }
-
-    // MARK: - Group-specific sections
-
-    private var strengthSetsSection: some View {
-        Section("Default sets") {
-            ForEach(Array(sets.enumerated()), id: \.element.id) { i, _ in
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Set \(i + 1)").font(.caption).foregroundStyle(.secondary)
-                    Stepper("Weight: \(Int(sets[i].weight)) lb", value: $sets[i].weight, in: 0...2000, step: 5)
-                    Stepper("Reps: \(sets[i].reps)", value: $sets[i].reps, in: 1...100)
-                }
-                .padding(.vertical, 6)
-            }
-            .onDelete { sets.remove(atOffsets: $0); if sets.isEmpty { sets = [SetDraft(reps: 10, weight: 0)] } }
-            Button {
-                let last = sets.last ?? SetDraft(reps: 10, weight: 0)
-                sets.append(SetDraft(reps: last.reps, weight: last.weight))
-            } label: { Label("Add set (copies last)", systemImage: "plus.circle") }
-        }
-    }
-
-    private var cardioSection: some View {
-        Section("Cardio") {
-            Stepper("Duration: \(durationMinutes) min", value: $durationMinutes, in: 1...300, step: 5)
-            Picker("Intensity", selection: $intensity) {
-                ForEach(CardioIntensity.allCases) { Text($0.displayName).tag($0) }
-            }
-        }
-    }
-
-    private var stretchSection: some View {
-        Section("Stretching") {
-            Stepper("Hold: \(holdSeconds)s", value: $holdSeconds, in: 1...600, step: 5)
-            Stepper("Sides: \(sides)", value: $sides, in: 1...2)
-            Stepper("Rounds: \(rounds)", value: $rounds, in: 1...20)
         }
     }
 
     @ViewBuilder
     private var machineSection: some View {
-        Section {
+        Section("Machine") {
             Toggle("Machine-based", isOn: $isMachine)
             if isMachine { TextField("Machine name", text: $machineName) }
-        } header: { Text("Machine") }
-
+        }
         if isMachine {
             Section("Machine settings (up to 4)") {
                 ForEach(Array(settings.enumerated()), id: \.element.id) { index, _ in
@@ -226,66 +198,6 @@ struct ExerciseEditorView: View {
             }
         }
     }
-
-    // MARK: - Photo & notes
-
-    /// Stretching has no photo (per its definition); strength & cardio do.
-    private var allowsPhoto: Bool { group != .stretching }
-
-    @ViewBuilder
-    private var photoNotesSection: some View {
-        Section {
-            if allowsPhoto {
-                if let data = photoData, let uiImage = UIImage(data: data) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 180)
-                        .clipped()
-                        .listRowInsets(EdgeInsets())
-                }
-                HStack {
-                    PhotosPicker(selection: $photoItem, matching: .images) {
-                        Label(photoData == nil ? "Choose photo" : "Replace photo", systemImage: "photo")
-                    }
-                    if CameraPicker.isAvailable {
-                        Spacer()
-                        Button { showCamera = true } label: { Label("Camera", systemImage: "camera") }
-                    }
-                }
-                if photoData != nil {
-                    Button(role: .destructive) { photoData = nil; photoItem = nil; fieldChanged() } label: {
-                        Label("Remove photo", systemImage: "trash")
-                    }
-                }
-            }
-            TextField("Notes", text: $notes, axis: .vertical)
-        } header: {
-            Text(allowsPhoto ? "Photo & notes" : "Notes")
-        }
-    }
-
-    // MARK: - Change tracking
-
-    private func fieldChanged() {
-        guard didLoad else { return } // ignore initial population
-        touched = true
-    }
-
-    private func backTapped() {
-        if isNew {
-            // Confirm only if something was entered.
-            if touched { showLeaveConfirm = true } else { dismiss() }
-        } else {
-            // Editing: commit on the way out (persists changes without a Save
-            // button and without per-change writes that would loop the library).
-            if touched { commit() }
-            dismiss()
-        }
-    }
-
-    // MARK: - Machine settings rows
 
     @ViewBuilder
     private func settingRow(_ index: Int) -> some View {
@@ -304,11 +216,42 @@ struct ExerciseEditorView: View {
         .padding(.vertical, 8)
     }
 
+    // MARK: - Photo
+
+    @ViewBuilder
+    private var photoSection: some View {
+        Section("Photo") {
+            if let data = photoData, let uiImage = UIImage(data: data) {
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 180)
+                    .overlay { Image(uiImage: uiImage).resizable().scaledToFill() }
+                    .clipped()
+                    .listRowInsets(EdgeInsets())
+            }
+            HStack {
+                Button { showLibrary = true } label: {
+                    Label(photoData == nil ? "Choose photo" : "Replace photo", systemImage: "photo")
+                }
+                if CameraPicker.isAvailable {
+                    Spacer()
+                    Button { showCamera = true } label: { Label("Camera", systemImage: "camera") }
+                }
+            }
+            if photoData != nil {
+                Button(role: .destructive) { photoData = nil } label: {
+                    Label("Remove photo", systemImage: "trash")
+                }
+            }
+        }
+    }
+
     // MARK: - Load / Save
 
     private func load() {
         guard !didLoad else { return }
-        defer { didLoad = true } // ignore the field changes from initial population
+        defer { didLoad = true }
+        if let forcedGroup { group = forcedGroup } // new exercise locked to a group
         guard let existing else { return }
         name = existing.name
         notes = existing.notes
@@ -335,15 +278,7 @@ struct ExerciseEditorView: View {
         }
     }
 
-    /// New-exercise Save button: commit then leave.
     private func save() {
-        commit()
-        dismiss()
-    }
-
-    /// Write the current state to the model. Used by Save (new) and by
-    /// auto-save on every change (editing an existing exercise).
-    private func commit() {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
 
@@ -352,7 +287,6 @@ struct ExerciseEditorView: View {
         exercise.name = trimmed
         exercise.notes = notes
         exercise.defaultSectionType = group
-        // Group-specific values.
         exercise.photoData = allowsPhoto ? photoData : nil
         exercise.durationMinutes = durationMinutes
         exercise.intensity = intensity
@@ -361,7 +295,7 @@ struct ExerciseEditorView: View {
         exercise.rounds = rounds
         exercise.updatedAt = .now
 
-        // Default sets only apply to strength; clear them otherwise.
+        // Per-set defaults apply to strength only.
         for d in exercise.defaultSets { context.delete(d) }
         exercise.defaultSets = []
         if group == .strength {
@@ -373,20 +307,21 @@ struct ExerciseEditorView: View {
             }
         }
 
-        // Machine + settings (strength & cardio only).
+        // Machine + its shared settings (strength & cardio only).
         if isMachine && group != .stretching {
             let machine: Machine
             if let mid = exercise.machineId,
                let existingMachine = try? context.fetch(FetchDescriptor<Machine>(predicate: #Predicate { $0.id == mid })).first {
                 machine = existingMachine
                 machine.name = machineName.isEmpty ? trimmed : machineName
-                for def in machine.settingDefinitions { context.delete(def) }
-                machine.settingDefinitions = []
             } else {
                 machine = Machine(name: machineName.isEmpty ? trimmed : machineName, source: .user)
                 context.insert(machine)
                 exercise.machineId = machine.id
             }
+            // Replace the machine's setting definitions with the edited drafts.
+            for def in machine.settingDefinitions { context.delete(def) }
+            machine.settingDefinitions = []
             var order = 0
             for s in settings where !s.isEmpty {
                 let def = MachineSettingDefinition(label: s.label.trimmingCharacters(in: .whitespaces),
@@ -404,5 +339,6 @@ struct ExerciseEditorView: View {
         }
 
         try? context.save()
+        dismiss()
     }
 }

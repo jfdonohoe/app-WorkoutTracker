@@ -75,20 +75,34 @@ struct RoutineExerciseEditSheet: View {
 struct ExercisePickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Query(filter: #Predicate<Exercise> { $0.deletedAt == nil }, sort: \Exercise.name) private var exercises: [Exercise]
+    /// When set, only exercises of this group are offered (and a new one is
+    /// created locked to it). Nil = show all (e.g. adding an exercise mid-workout).
+    var group: SectionType? = nil
     var onPick: (Exercise) -> Void
+
+    @State private var showNewExercise = false
+
+    private var filtered: [Exercise] {
+        guard let group else { return exercises }
+        return exercises.filter { $0.defaultSectionType == group }
+    }
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    NavigationLink {
-                        ExerciseEditorView()
-                    } label: {
+                    Button { showNewExercise = true } label: {
                         Label("Create new exercise", systemImage: "plus.circle")
                     }
                 }
-                Section("Exercises") {
-                    ForEach(exercises) { ex in
+                Section(group?.displayName ?? "Exercises") {
+                    if filtered.isEmpty {
+                        Text(group == nil
+                             ? "No exercises yet. Create one above."
+                             : "No \(group!.displayName.lowercased()) exercises yet. Create one above.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    ForEach(filtered) { ex in
                         Button {
                             onPick(ex)
                             dismiss()
@@ -101,9 +115,12 @@ struct ExercisePickerSheet: View {
                     }
                 }
             }
-            .navigationTitle("Add Exercise")
+            .navigationTitle(group == nil ? "Add Exercise" : "Add \(group!.displayName)")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
+            }
+            .sheet(isPresented: $showNewExercise) {
+                NavigationStack { ExerciseEditorView(forcedGroup: group) }
             }
         }
     }

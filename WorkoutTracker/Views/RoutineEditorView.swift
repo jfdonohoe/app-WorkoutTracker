@@ -33,6 +33,10 @@ struct RoutineEditorView: View {
     @State private var addExerciseSection: RoutineSection?
     @State private var editExercise: RoutineExercise?
     @State private var showDeleteConfirm = false
+    // Schedule (one ScheduleRule per routine, drives Today/Calendar).
+    @State private var scheduleEnabled = false
+    @State private var recurrence = RecurrenceState()
+    @State private var didLoadSchedule = false
 
     private var repo: RoutineRepository { RoutineRepository(context) }
 
@@ -65,6 +69,8 @@ struct RoutineEditorView: View {
                 }
             }
 
+            scheduleSection
+
             if let version = displayVersion {
                 restSection(version)
                 ForEach(version.orderedSections) { section in
@@ -81,6 +87,9 @@ struct RoutineEditorView: View {
                 }
             }
         }
+        .onAppear(perform: loadSchedule)
+        .onChange(of: scheduleEnabled) { _, _ in scheduleChanged() }
+        .onChange(of: recurrence) { _, _ in scheduleChanged() }
         .confirmationDialog("Delete this routine?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Delete routine", role: .destructive) {
                 repo.softDelete(routine)
@@ -111,7 +120,8 @@ struct RoutineEditorView: View {
             }
         }
         .sheet(item: $addExerciseSection) { section in
-            ExercisePickerSheet { exercise in
+            // Only exercises matching this grouping's type can be added.
+            ExercisePickerSheet(group: section.type) { exercise in
                 addExercise(exercise, to: section)
             }
         }
@@ -125,6 +135,73 @@ struct RoutineEditorView: View {
                 saveSets(to: ex, sets: sets, rest: rest)
             }
         }
+    }
+
+    // MARK: - Schedule
+
+    @ViewBuilder
+    private var scheduleSection: some View {
+        Section {
+            Toggle("Repeat on a schedule", isOn: $scheduleEnabled)
+            if scheduleEnabled {
+                DatePicker("Starts", selection: $recurrence.startDate, displayedComponents: .date)
+                RecurrenceEditor(state: $recurrence)
+                Text(recurrence.summaryText).font(.caption).foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Schedule")
+        } footer: {
+            Text(scheduleEnabled
+                 ? "This routine will appear on Today and the Calendar on the matching days."
+                 : "Turn on to repeat this routine automatically on Today and the Calendar.")
+        }
+    }
+
+    /// Load the routine's existing schedule (if any) into the editor on appear.
+    private func loadSchedule() {
+        guard !didLoadSchedule else { return }
+        defer { didLoadSchedule = true }
+        let rid = routine.id
+        let rules = (try? context.fetch(
+            FetchDescriptor<ScheduleRule>(predicate: #Predicate { $0.routineId == rid && $0.deletedAt == nil })
+        )) ?? []
+        if let rule = rules.first {
+            scheduleEnabled = true
+            recurrence = RecurrenceState(rule: rule)
+        } else {
+            var seed = RecurrenceState()
+            seed.weekdays = [Calendar.current.component(.weekday, from: Date())]
+            seed.untilDate = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
+            recurrence = seed
+            scheduleEnabled = false
+        }
+    }
+
+    private func scheduleChanged() {
+        guard didLoadSchedule else { return } // ignore the initial load
+        // During creation the routine may still be cancelled (discarded), so we
+        // defer persistence to finishCreation(); persist live only when editing.
+        guard !isCreating else { return }
+        applySchedule()
+    }
+
+    /// Reconcile the routine's single ScheduleRule with the editor state.
+    private func applySchedule() {
+        let rid = routine.id
+        let rules = (try? context.fetch(
+            FetchDescriptor<ScheduleRule>(predicate: #Predicate { $0.routineId == rid && $0.deletedAt == nil })
+        )) ?? []
+        if scheduleEnabled {
+            if let rule = rules.first {
+                recurrence.apply(to: rule)
+                for extra in rules.dropFirst() { extra.deletedAt = .now } // keep one
+            } else {
+                context.insert(recurrence.buildRule(routineId: rid))
+            }
+        } else {
+            for rule in rules { rule.deletedAt = .now } // unschedule
+        }
+        try? context.save()
     }
 
     // MARK: - Sections
@@ -314,6 +391,8 @@ struct RoutineEditorView: View {
     }
 
     private func addExercise(_ exercise: Exercise, to section: RoutineSection) {
+        // Don't allow an exercise from a different group into this grouping.
+        guard exercise.defaultSectionType == section.type else { return }
         ensureEditableVersion()
         guard let sec = currentSection(section) else { return }
         let defaults = exercise.effectiveDefaultSets
@@ -356,6 +435,7 @@ struct RoutineEditorView: View {
     private func finishCreation() {
         routine.name = routine.name.trimmingCharacters(in: .whitespaces)
         save()
+        applySchedule() // persist the schedule now that the routine is kept
         onCommit?()
         dismiss()
     }

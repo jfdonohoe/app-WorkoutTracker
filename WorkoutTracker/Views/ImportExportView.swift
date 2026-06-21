@@ -26,6 +26,12 @@ struct ImportExportView: View {
     @State private var csvMessage: String?
     @State private var csvError: String?
 
+    // CSV exercise-library import
+    @State private var exTemplateURL: URL?
+    @State private var showExCSVImporter = false
+    @State private var exMessage: String?
+    @State private var exError: String?
+
     var body: some View {
         List {
             Section {
@@ -65,21 +71,50 @@ struct ImportExportView: View {
             }
 
             Section {
+                if let url = exTemplateURL {
+                    ShareLink(item: url) {
+                        Label("Share exercises template", systemImage: "square.and.arrow.up")
+                    }
+                } else {
+                    Button {
+                        exTemplateURL = try? CSVExerciseImporter.writeExampleFile()
+                    } label: {
+                        Label("Get exercises CSV template", systemImage: "doc.text")
+                    }
+                }
+                Button {
+                    showExCSVImporter = true
+                } label: {
+                    Label("Import exercises from CSV", systemImage: "dumbbell")
+                }
+                if let exMessage {
+                    Label(exMessage, systemImage: "checkmark.circle").foregroundStyle(.green)
+                }
+                if let exError {
+                    Label(exError, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+                }
+            } header: {
+                Text("Exercises from CSV")
+            } footer: {
+                Text("Builds your exercise library. Columns: group, exercise, machine, machine_settings, sets, reps, weight, duration_min, intensity, hold_seconds, sides, rounds, notes. Required: group, exercise. Strength needs sets/reps/weight; cardio needs duration_min/intensity; stretching needs hold_seconds/sides/rounds. Re-importing updates an exercise with the same name + group. All-or-nothing: any invalid row blocks the whole import.")
+            }
+
+            Section {
                 if let url = csvTemplateURL {
                     ShareLink(item: url) {
-                        Label("Share example CSV", systemImage: "square.and.arrow.up")
+                        Label("Share routines template", systemImage: "square.and.arrow.up")
                     }
                 } else {
                     Button {
                         csvTemplateURL = try? CSVRoutineImporter.writeExampleFile()
                     } label: {
-                        Label("Get example CSV template", systemImage: "doc.text")
+                        Label("Get routines CSV template", systemImage: "doc.text")
                     }
                 }
                 Button {
                     showCSVImporter = true
                 } label: {
-                    Label("Import routine from CSV", systemImage: "tablecells.badge.ellipsis")
+                    Label("Import routines from CSV", systemImage: "tablecells.badge.ellipsis")
                 }
                 if let csvMessage {
                     Label(csvMessage, systemImage: "checkmark.circle").foregroundStyle(.green)
@@ -88,9 +123,9 @@ struct ImportExportView: View {
                     Label(csvError, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
                 }
             } header: {
-                Text("Routine from CSV")
+                Text("Routines from CSV")
             } footer: {
-                Text("Columns: routine, section, exercise, machine, sets, reps, weight. Required: routine, exercise, sets, reps, weight. Bad rows are reported and skipped.")
+                Text("Builds routines (and any exercises they reference). Columns: routine, group, exercise, machine, machine_settings, sets, reps, weight, duration_min, intensity, hold_seconds, sides, rounds, notes, recurrence, interval, weekday, month_day, count, start_date. Always required: routine, group, exercise. Strength needs sets/reps/weight; cardio needs duration_min/intensity; stretching needs hold_seconds/sides/rounds. Schedule is optional — set recurrence (daily/weekly/monthly) on one row per routine; weekly also needs weekday. All-or-nothing: any invalid row blocks the whole import.")
             }
         }
         .navigationTitle("Import / Export")
@@ -100,6 +135,10 @@ struct ImportExportView: View {
         .fileImporter(isPresented: $showCSVImporter,
                       allowedContentTypes: [.commaSeparatedText, .plainText, .text, .data]) { result in
             handleCSVImport(result)
+        }
+        .fileImporter(isPresented: $showExCSVImporter,
+                      allowedContentTypes: [.commaSeparatedText, .plainText, .text, .data]) { result in
+            handleExCSVImport(result)
         }
     }
 
@@ -142,16 +181,29 @@ struct ImportExportView: View {
             do {
                 let report = try CSVRoutineImporter(context).importFile(at: url)
                 csvMessage = report.summary
-                // Surface the first few row errors so the user can fix the file.
-                if !report.rowErrors.isEmpty {
-                    csvError = report.rowErrors.prefix(3).joined(separator: "\n")
-                        + (report.rowErrors.count > 3 ? "\n…" : "")
-                }
             } catch {
                 csvError = error.localizedDescription
             }
         case .failure(let error):
             csvError = "Could not open file: \(error.localizedDescription)"
+        }
+    }
+
+    private func handleExCSVImport(_ result: Result<URL, Error>) {
+        exMessage = nil
+        exError = nil
+        switch result {
+        case .success(let url):
+            let needsScope = url.startAccessingSecurityScopedResource()
+            defer { if needsScope { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let report = try CSVExerciseImporter(context).importFile(at: url)
+                exMessage = report.summary
+            } catch {
+                exError = error.localizedDescription
+            }
+        case .failure(let error):
+            exError = "Could not open file: \(error.localizedDescription)"
         }
     }
 }

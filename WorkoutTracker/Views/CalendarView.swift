@@ -175,11 +175,10 @@ struct CalendarView: View {
 
             let daySessions = sessions.filter { sessionDate(for: $0).map { cal.isDate($0, inSameDayAs: selectedDay) } ?? false && $0.deletedAt == nil }
             if daySessions.isEmpty {
-                let scheduledIds = Set(scheduleService.scheduledRoutineIds(on: selectedDay, rules: schedules))
-                let scheduledRoutines = routines.filter { scheduledIds.contains($0.id) }
-                if !scheduledRoutines.isEmpty {
+                let dayScheduled = scheduledRoutines(on: selectedDay)
+                if !dayScheduled.isEmpty {
                     let isPast = cal.startOfDay(for: selectedDay) < cal.startOfDay(for: .now)
-                    ForEach(scheduledRoutines) { routine in
+                    ForEach(dayScheduled) { routine in
                         HStack {
                             Label(isPast ? "Missed: \(routine.name)" : "Scheduled: \(routine.name)",
                                   systemImage: isPast ? "exclamationmark.circle" : "calendar")
@@ -267,9 +266,17 @@ struct CalendarView: View {
             context.insert(oneOff)
         } else {
             // Apply to all future recurrences: copy the clone's content into the
-            // original routine (new version) and discard the clone.
+            // original routine (new version) and discard the clone. Move any
+            // schedule set on the clone onto the original (replacing its own), so
+            // it isn't orphaned when the clone is deleted.
             if let original = routines.first(where: { $0.id == edit.originalId }) {
                 repo.replaceContent(of: original, with: edit.clone)
+                let cloneId = edit.clone.id
+                let cloneRules = schedules.filter { $0.routineId == cloneId && $0.deletedAt == nil }
+                if !cloneRules.isEmpty {
+                    for r in schedules where r.routineId == original.id && r.deletedAt == nil { r.deletedAt = .now }
+                    for r in cloneRules { r.routineId = original.id; r.refreshRRULE() }
+                }
             }
             context.delete(edit.clone)
         }
@@ -279,6 +286,8 @@ struct CalendarView: View {
 
     private func discardInstanceEdit() {
         if let edit = pendingInstanceScope {
+            // Remove any schedule rules set on the clone so they aren't orphaned.
+            for r in schedules where r.routineId == edit.clone.id { context.delete(r) }
             context.delete(edit.clone)
             try? context.save()
         }
@@ -326,7 +335,9 @@ struct CalendarView: View {
         if let best = daySessions.max(by: { statusRank($0.status) < statusRank($1.status) }) {
             return DayInfo(color: statusColor(best.status))
         }
-        let scheduled = !scheduleService.scheduledRoutineIds(on: day, rules: schedules).isEmpty
+        // Routine-aware: only routines that still exist count, so the dot can
+        // never disagree with the day detail (no orphaned-rule phantom dots).
+        let scheduled = !scheduledRoutines(on: day).isEmpty
         if scheduled {
             if cal.startOfDay(for: day) < cal.startOfDay(for: .now) {
                 return DayInfo(color: .red) // missed
@@ -334,6 +345,15 @@ struct CalendarView: View {
             return DayInfo(color: .blue) // future scheduled
         }
         return DayInfo(color: .clear)
+    }
+
+    /// Routines BOTH scheduled on `day` and still present (non-deleted). The dot
+    /// and the day detail both use this, so a ScheduleRule whose routine no longer
+    /// exists draws no dot and shows no detail (instead of a dot with no detail).
+    private func scheduledRoutines(on day: Date) -> [Routine] {
+        let ids = Set(scheduleService.scheduledRoutineIds(on: day, rules: schedules))
+        guard !ids.isEmpty else { return [] }
+        return routines.filter { ids.contains($0.id) }
     }
 
     private func sessionDate(for s: WorkoutSession) -> Date? {

@@ -13,6 +13,8 @@ import SwiftData
 struct ExerciseLibraryView: View {
     @Environment(\.modelContext) private var context
     @Query(filter: #Predicate<Exercise> { $0.deletedAt == nil }, sort: \Exercise.name) private var exercises: [Exercise]
+    @State private var showNewExercise = false
+    @State private var editingExercise: Exercise?
 
     var body: some View {
         List {
@@ -26,9 +28,18 @@ struct ExerciseLibraryView: View {
                 if !groupExercises.isEmpty {
                     Section(group.displayName) {
                         ForEach(groupExercises) { ex in
-                            NavigationLink {
-                                ExerciseEditorView(existing: ex)
-                            } label: { row(ex) }
+                            // Edit in a SHEET (not a push): the editor's per-set
+                            // @State ForEach loops if pushed without its own stack.
+                            Button { editingExercise = ex } label: {
+                                HStack {
+                                    row(ex)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.bold()).foregroundStyle(.tertiary)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
                         .onDelete { offsets in softDelete(groupExercises, offsets) }
                     }
@@ -38,8 +49,14 @@ struct ExerciseLibraryView: View {
         .navigationTitle("Exercises")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink { ExerciseEditorView() } label: { Image(systemName: "plus") }
+                Button { showNewExercise = true } label: { Image(systemName: "plus") }
             }
+        }
+        .sheet(isPresented: $showNewExercise) {
+            NavigationStack { ExerciseEditorView() }
+        }
+        .sheet(item: $editingExercise) { ex in
+            NavigationStack { ExerciseEditorView(existing: ex) }
         }
     }
 

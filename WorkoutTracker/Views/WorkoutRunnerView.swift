@@ -27,6 +27,13 @@ struct WorkoutRunnerView: View {
 
     private var repo: WorkoutRepository { WorkoutRepository(context) }
 
+    /// True when every planned set is completed (the workout would lock as
+    /// "completed" rather than partial/abandoned).
+    private var allSetsComplete: Bool {
+        let sets = session.exercises.flatMap(\.sets)
+        return !sets.isEmpty && sets.allSatisfy(\.isCompleted)
+    }
+
     var body: some View {
         List {
             if restTimer.isRunning || restTimer.isFinished {
@@ -64,9 +71,14 @@ struct WorkoutRunnerView: View {
 
             Section {
                 Button { showFinishConfirm = true } label: {
-                    BigActionLabel(title: "Finish workout", systemImage: "flag.checkered")
+                    BigActionLabel(title: allSetsComplete ? "Finish Workout" : "Stop Workout",
+                                   systemImage: allSetsComplete ? "flag.checkered" : "stop.circle")
+                        .foregroundStyle(.white)
                 }
                 .buttonStyle(.borderedProminent)
+                // Completed → green "Finish Workout"; abandoned/incomplete →
+                // black "Stop Workout".
+                .tint(allSetsComplete ? .green : .black)
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
             }
@@ -81,11 +93,14 @@ struct WorkoutRunnerView: View {
                 addFromLibrary(exercise)
             }
         }
-        .confirmationDialog("Finish this workout?", isPresented: $showFinishConfirm, titleVisibility: .visible) {
-            Button("Finish & lock", role: .destructive) { finish() }
+        .confirmationDialog(allSetsComplete ? "Finish this workout?" : "Stop this workout?",
+                            isPresented: $showFinishConfirm, titleVisibility: .visible) {
+            Button(allSetsComplete ? "Finish & lock" : "Stop & lock", role: .destructive) { finish() }
             Button("Keep going", role: .cancel) {}
         } message: {
-            Text("Completed workouts become permanent history and can only be changed with corrections.")
+            Text(allSetsComplete
+                 ? "Completed workouts become permanent history and can only be changed with corrections."
+                 : "This workout isn't finished. Stopping locks it as-is; you can't add to it later.")
         }
     }
 

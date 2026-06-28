@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workout App — Design System</title>
+<style>
+  :root{
+    /* Brand */
+    --accent:#007840;          /* sRGB 0, 0.470, 0.250 — AccentColor.colorset */
+    /* Timer / rest-countdown (Complete button) */
+    --timer-container:rgba(31,29,26,0.08);  /* faint base behind the countdown */
+    --stripe-a:#6E7A3F;        /* barber-pole stripe A */
+    --stripe-b:#EAEBDD;        /* barber-pole stripe B */
+    /* iOS semantic system colors */
+    --green:#34C759;
+    --orange:#FF9500;
+    --red:#FF3B30;
+    --yellow:#FFCC00;
+    --blue:#007AFF;
+    --black:#000000;
+    --white:#FFFFFF;
+    /* Neutrals / backgrounds */
+    --bg:#FAF8F2;              /* grouped background (warm off-white) */
+    --card:#FFFFFF;            /* card / surface */
+    --fill:#F2EEE4;            /* fill */
+    --label:#000000;
+    --label-2:#7A746A;         /* secondary label (warm gray) */
+    --label-3:rgba(60,60,67,.30);
+    --hairline:rgba(60,60,67,.16);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--label);
+    -webkit-font-smoothing:antialiased;
+    padding:32px 20px 80px;
+  }
+  .wrap{max-width:980px;margin:0 auto}
+  header.page{margin-bottom:28px}
+  header.page .pill{display:inline-block;background:var(--accent);color:#fff;font-weight:600;font-size:13px;
+    padding:5px 12px;border-radius:999px;letter-spacing:.02em}
+  header.page h1{font-size:34px;font-weight:700;letter-spacing:-.02em;margin:14px 0 6px}
+  header.page p{color:var(--label-2);font-size:16px;margin:0;max-width:60ch}
+  section{background:var(--card);border-radius:18px;padding:24px;margin-top:22px;
+    box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.04)}
+  section h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--label-2);margin:0 0 18px}
+  /* ---- color grid ---- */
+  .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+  .sw{border:1px solid var(--hairline);border-radius:14px;overflow:hidden;background:var(--card)}
+  .sw .chip{height:84px}
+  .sw .meta{padding:10px 12px}
+  .sw .name{font-size:14px;font-weight:600}
+  .sw .hex{font-size:12px;color:var(--label-2);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:2px}
+  .sw .use{font-size:12px;color:var(--label-2);margin-top:6px;line-height:1.35}
+  .swatches.small .chip{height:56px}
+  /* ---- type ---- */
+  .type-row{display:flex;align-items:baseline;gap:18px;padding:14px 0;border-bottom:1px solid var(--hairline)}
+  .type-row:last-child{border-bottom:0}
+  .type-row .sample{flex:1;min-width:0;color:var(--label)}
+  .type-row .spec{flex:0 0 240px;font-size:12px;color:var(--label-2);line-height:1.4}
+  .type-row .spec b{color:var(--label);font-weight:600}
+  .t-largeTitle{font-size:34px;font-weight:700;letter-spacing:-.02em}
+  .t-title2{font-size:22px;font-weight:700}
+  .t-title3{font-size:20px;font-weight:600}
+  .t-headline{font-size:17px;font-weight:600}
+  .t-body{font-size:17px;font-weight:400}
+  .t-callout{font-size:16px;font-weight:400}
+  .t-subheadline{font-size:15px;font-weight:400}
+  .t-footnote{font-size:13px;font-weight:400}
+  .t-caption{font-size:12px;font-weight:400}
+  .t-caption2{font-size:11px;font-weight:400}
+  .t-clock{font-size:36px;font-weight:700;font-feature-settings:"tnum";
+    font-family:ui-rounded,"SF Pro Rounded",-apple-system,system-ui,sans-serif}
+  .secondary{color:var(--label-2)}
+  /* ---- buttons ---- */
+  .btn-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+  .btn{position:relative;height:50px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+    font-size:17px;font-weight:600;overflow:hidden;isolation:isolate;user-select:none}
+  .btn .ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:16px}
+  .btn.accent{background:var(--accent);color:#fff}
+  .btn.green{background:var(--accent);color:#fff}   /* all-exercises-complete = brand green #007840 */
+  .btn.black{background:#000;color:#fff}
+  .btn.muted{background:var(--label-2);color:#fff}   /* secondary action = Muted Foreground #7A746A */
+  .caption-under{font-size:12px;color:var(--label-2);margin-top:8px;text-align:center;line-height:1.4}
+  .stack{display:flex;flex-direction:column}
+  /* ---- animated timer backgrounds ---- */
+  .anim-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:22px}
+  .anim-card{}
+  .anim-card h3{font-size:15px;font-weight:600;margin:0 0 4px}
+  .anim-card p{font-size:12.5px;color:var(--label-2);margin:0 0 12px;line-height:1.45;min-height:34px}
+  .timerbtn{position:relative;height:54px;border-radius:12px;overflow:hidden;
+    display:flex;align-items:center;justify-content:center}
+  .timerbtn .label{position:relative;z-index:3;color:#000;font-weight:600;font-size:17px;
+    font-feature-settings:"tnum"}
+
+  /* Timer-state background — barber-pole revealed by the app's countdown mask.
+     Replicates SetActionButtonLabel: a faint container with the fill masked
+     open from the LEFT, growing to the RIGHT as the rest timer counts down. */
+  .a-stripes{background:var(--timer-container)}         /* faint container fill */
+  .a-stripes .bars{position:absolute;inset:0;z-index:1;
+    /* barber-pole fill: stripe A / stripe B */
+    background:repeating-linear-gradient(45deg,
+      var(--stripe-a) 0 14px, var(--stripe-b) 14px 28px);
+    background-size:39.6px 39.6px;
+    /* stripes scroll; clip-path is the mask that opens left→right over the count */
+    animation:stripes 1.1s linear infinite, countFill 4s linear infinite}
+  @keyframes stripes{0%{background-position:0 0}100%{background-position:39.6px 0}}
+  @keyframes countFill{
+    0%{clip-path:inset(0 100% 0 0)}     /* hidden — clipped fully from the right */
+    88%{clip-path:inset(0 0 0 0)}       /* filled to the right edge */
+    100%{clip-path:inset(0 0 0 0)}}
+
+  footer{color:var(--label-3);font-size:12px;text-align:center;margin-top:28px}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    background:var(--fill);padding:1px 6px;border-radius:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page">
+    <span class="pill">Workout Tracker</span>
+    <h1>Design System</h1>
+    <p>Colors, type styles, and button states pulled directly from the app's SwiftUI code and asset catalog.</p>
+  </header>
+
+  <!-- ============ BRAND & TIMER ============ -->
+  <section>
+    <h2>Brand &amp; timer colors</h2>
+    <div class="swatches">
+      <div class="sw">
+        <div class="chip" style="background:var(--accent)"></div>
+        <div class="meta"><div class="name">Accent / Brand</div><div class="hex">#007840</div>
+          <div class="use">Primary tint. Buttons, selected days, toggles. <code>AccentColor.colorset</code></div></div>
+      </div>
+      <div class="sw">
+        <div class="chip" style="background:var(--timer-container)"></div>
+        <div class="meta"><div class="name">Timer container</div><div class="hex">rgba(31,29,26,.08)</div>
+          <div class="use">Faint base behind the rest countdown on the Complete button.</div></div>
+      </div>
+      <div class="sw">
+        <div class="chip" style="background:var(--stripe-a)"></div>
+        <div class="meta"><div class="name">Barber-pole A</div><div class="hex">#6E7A3F</div>
+          <div class="use">Olive stripe of the countdown fill (revealed left→right). Text on it is black.</div></div>
+      </div>
+      <div class="sw">
+        <div class="chip" style="background:var(--stripe-b)"></div>
+        <div class="meta"><div class="name">Barber-pole B</div><div class="hex">#EAEBDD</div>
+          <div class="use">Pale stripe of the countdown fill, alternating with olive.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SEMANTIC ============ -->
+  <section>
+    <h2>Status &amp; semantic colors</h2>
+    <div class="swatches small">
+      <div class="sw"><div class="chip" style="background:var(--green)"></div>
+        <div class="meta"><div class="name">Green</div><div class="hex">#34C759</div>
+          <div class="use">Completed · done checkmarks (status)</div></div></div>
+      <div class="sw"><div class="chip" style="background:var(--orange)"></div>
+        <div class="meta"><div class="name">Orange</div><div class="hex">#FF9500</div>
+          <div class="use">Partial · demo data badge</div></div></div>
+      <div class="sw"><div class="chip" style="background:var(--red)"></div>
+        <div class="meta"><div class="name">Red</div><div class="hex">#FF3B30</div>
+          <div class="use">Missed · skipped · errors</div></div></div>
+      <div class="sw"><div class="chip" style="background:var(--yellow)"></div>
+        <div class="meta"><div class="name">Yellow</div><div class="hex">#FFCC00</div>
+          <div class="use">In-progress (started) status dot</div></div></div>
+      <div class="sw"><div class="chip" style="background:var(--blue)"></div>
+        <div class="meta"><div class="name">Blue</div><div class="hex">#007AFF</div>
+          <div class="use">Upcoming scheduled date</div></div></div>
+      <div class="sw"><div class="chip" style="background:#000"></div>
+        <div class="meta"><div class="name">Black</div><div class="hex">#000000</div>
+          <div class="use">Stop Workout (incomplete)</div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ NEUTRALS ============ -->
+  <section>
+    <h2>Neutrals &amp; backgrounds</h2>
+    <div class="swatches small">
+      <div class="sw"><div class="chip" style="background:var(--bg);border-bottom:1px solid var(--hairline)"></div>
+        <div class="meta"><div class="name">Grouped background</div><div class="hex">#FAF8F2</div>
+          <div class="use">App / screen background</div></div></div>
+      <div class="sw"><div class="chip" style="background:var(--card);border-bottom:1px solid var(--hairline)"></div>
+        <div class="meta"><div class="name">Card / surface</div><div class="hex">#FFFFFF</div>
+          <div class="use">Cards / surfaces (radius 16)</div></div></div>
+      <div class="sw"><div class="chip" style="background:var(--fill)"></div>
+        <div class="meta"><div class="name">Fill</div><div class="hex">#F2EEE4</div>
+          <div class="use">Unselected chips · inline code</div></div></div>
+      <div class="sw"><div class="chip" style="background:var(--label-2)"></div>
+        <div class="meta"><div class="name">Muted Foreground</div><div class="hex">#7A746A</div>
+          <div class="use">Secondary buttons, subtitles, captions</div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TYPE ============ -->
+  <section>
+    <h2>Text styles</h2>
+
+    <div class="type-row">
+      <div class="sample t-largeTitle">Workout complete</div>
+      <div class="spec"><b>Large Title</b> · 34 / Bold<br>Empty-state &amp; summary headers</div>
+    </div>
+    <div class="type-row">
+      <div class="sample t-title2">Today's workout</div>
+      <div class="spec"><b>Title 2</b> · 22 / Bold<br>Section / screen headers</div>
+    </div>
+    <div class="type-row">
+      <div class="sample t-title3">3 × 10 @ 45 lb</div>
+      <div class="spec"><b>Title 3</b> · 20 / Semibold (mono digits)<br>Set value steppers</div>
+    </div>
+    <div class="type-row">
+      <div class="sample t-headline">Complete Set</div>
+      <div class="spec"><b>Headline</b> · 17 / Semibold<br>Every primary button (<code>BigActionLabel</code>), status line</div>
+    </div>
+    <div class="type-row">
+      <div class="sample t-body">Lat Pulldown</div>
+      <div class="spec"><b>Body</b> · 17 / Regular<br>Exercise name, list rows</div>
+    </div>
+    <div class="type-row">
+      <div class="sample t-callout secondary">Keep your core braced throughout the movement.</div>
+      <div class="spec"><b>Callout</b> · 16 / Regular<br>Exercise notes</div>
+    </div>
+    <div class="type-row">
+      <div class="sample t-subheadline secondary">Next: Leg Press</div>
+      <div class="spec"><b>Subheadline</b> · 15 / Regular<br>Upcoming summary</div>
+    </div>
+    <div class="type-row">
+      <div class="sample t-footnote secondary">3 exercises</div>
+      <div class="spec"><b>Footnote</b> · 13 / Regular<br>Supporting detail</div>
+    </div>
+    <div class="type-row">
+      <div class="sample t-caption secondary">Set 1 · 2 sets</div>
+      <div class="spec"><b>Caption</b> · 12 / Regular<br>Row subtitles, set labels</div>
+    </div>
+    <div class="type-row">
+      <div class="sample t-caption2 secondary">Pause</div>
+      <div class="spec"><b>Caption 2</b> · 11 / Regular<br>Timer button labels</div>
+    </div>
+    <div class="type-row">
+      <div class="sample t-clock">1:30</div>
+      <div class="spec"><b>Timer clock</b> · 36 / Bold · Rounded · mono digits<br><code>.system(size:36,weight:.bold,design:.rounded)</code></div>
+    </div>
+  </section>
+
+  <!-- ============ BUTTON STATES ============ -->
+  <section>
+    <h2>Button states</h2>
+    <div class="btn-grid">
+      <div class="stack">
+        <div class="btn accent"><span class="ico">✓</span>Complete Set</div>
+        <div class="caption-under">Solid accent · white text (default action)</div>
+      </div>
+      <div class="stack">
+        <div class="btn green"><span class="ico">⚑</span>Finish Workout</div>
+        <div class="caption-under">Brand green #007840 · all exercises complete</div>
+      </div>
+      <div class="stack">
+        <div class="btn black"><span class="ico">◼</span>Stop Workout</div>
+        <div class="caption-under">Black · workout incomplete</div>
+      </div>
+      <div class="stack">
+        <div class="btn muted"><span class="ico">🔍</span>View Summary</div>
+        <div class="caption-under">Secondary · Muted Foreground #7A746A</div>
+      </div>
+      <div class="stack">
+        <div class="timerbtn a-stripes"><div class="bars"></div>
+          <span class="label">Rest 0:45</span></div>
+        <div class="caption-under">Current timer state — barber-pole countdown, black text</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ANIMATED TIMER BACKGROUND ============ -->
+  <section>
+    <h2>Timer-state background</h2>
+    <div class="anim-grid">
+
+      <div class="anim-card">
+        <h3>Barber-Pole Countdown</h3>
+        <p>Replicates the app's rest-countdown reveal: a faint container (rgba 31,29,26,.08) with the barber-pole fill (#6E7A3F / #EAEBDD) masked open from the left and growing right as the timer counts down.</p>
+        <div class="timerbtn a-stripes">
+          <div class="bars"></div>
+          <span class="label">Rest 0:45</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ REST TIMER COLOR EXPLORER ============ -->
+  <style>
+    .rt-explorer{display:grid;grid-template-columns:1fr;gap:20px;max-width:540px}
+    .rt-card{--rt-bg:#7A746A;--rt-text:#FFFFFF;--rt-bar:#FFFFFF;--rt-btn:#FFFFFF;
+      background:var(--rt-bg);border-radius:16px;padding:16px;color:var(--rt-text)}
+    .rt-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+    .rt-label{font-size:12px;opacity:.85}
+    .rt-time{font-size:36px;font-weight:700;line-height:1.05;
+      font-family:ui-rounded,"SF Pro Rounded",-apple-system,system-ui,sans-serif;
+      font-feature-settings:"tnum"}
+    .rt-next{font-size:15px;opacity:.85;text-align:right;max-width:48%}
+    .rt-bar{height:6px;border-radius:3px;margin:14px 0;overflow:hidden;
+      background:color-mix(in srgb, var(--rt-bar) 28%, transparent)}
+    .rt-bar-fill{height:100%;border-radius:3px;background:var(--rt-bar)}
+    .rt-buttons{display:flex;gap:10px}
+    .rt-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+      padding:8px 4px;border-radius:9px;cursor:pointer;font:inherit;color:var(--rt-btn);
+      background:color-mix(in srgb, var(--rt-btn) 14%, transparent);
+      border:1px solid color-mix(in srgb, var(--rt-btn) 40%, transparent)}
+    .rt-btn span{font-size:15px;line-height:1;font-weight:700}
+    .rt-btn small{font-size:11px}
+    .rt-controls{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+    .rt-controls label{display:flex;align-items:center;justify-content:space-between;gap:10px;
+      font-size:13px;color:var(--label);border:1px solid var(--hairline);border-radius:10px;padding:8px 12px}
+    .rt-controls input[type=color]{width:42px;height:28px;border:none;background:none;cursor:pointer;padding:0}
+    .rt-presets{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+    .rt-preset{font-size:12px;border:1px solid var(--hairline);background:var(--card);
+      border-radius:999px;padding:6px 12px;cursor:pointer;color:var(--label)}
+    .rt-readout{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+      color:var(--label-2);margin-top:12px}
+  </style>
+  <section>
+    <h2>Rest timer — color explorer</h2>
+    <p style="color:var(--label-2);font-size:13px;margin:-8px 0 18px;max-width:60ch">
+      Replicates the in-progress rest-timer bar. Tweak each color to try combinations, or pick a preset.
+      The app currently uses Muted Foreground #7A746A with white type &amp; status.</p>
+    <div class="rt-explorer">
+      <div class="rt-card" id="rtCard">
+        <div class="rt-top">
+          <div>
+            <div class="rt-label">Resting</div>
+            <div class="rt-time">1:30</div>
+          </div>
+          <div class="rt-next">Next: Leg Press</div>
+        </div>
+        <div class="rt-bar"><div class="rt-bar-fill" style="width:55%"></div></div>
+        <div class="rt-buttons">
+          <button class="rt-btn"><span>❚❚</span><small>Pause</small></button>
+          <button class="rt-btn"><span>↺</span><small>Reset</small></button>
+          <button class="rt-btn"><span>+30</span><small>+30s</small></button>
+          <button class="rt-btn"><span>✕</span><small>Done</small></button>
+        </div>
+      </div>
+
+      <div>
+        <div class="rt-controls">
+          <label>Background <input type="color" id="rtBg" value="#7A746A"></label>
+          <label>Type <input type="color" id="rtText" value="#FFFFFF"></label>
+          <label>Status bar <input type="color" id="rtBar" value="#FFFFFF"></label>
+          <label>Buttons <input type="color" id="rtBtn" value="#FFFFFF"></label>
+        </div>
+        <div class="rt-presets">
+          <button class="rt-preset" data-c="#7A746A,#FFFFFF,#FFFFFF,#FFFFFF">Current · muted / white</button>
+          <button class="rt-preset" data-c="#6E7A3F,#FFFFFF,#EAEBDD,#FFFFFF">Olive / white</button>
+          <button class="rt-preset" data-c="#1F1D1A,#FAF8F2,#6E7A3F,#FAF8F2">Charcoal / cream</button>
+          <button class="rt-preset" data-c="#FAF8F2,#1F1D1A,#6E7A3F,#7A746A">Light card / dark text</button>
+          <button class="rt-preset" data-c="#007840,#FFFFFF,#EAEBDD,#FFFFFF">Brand green / white</button>
+        </div>
+        <div class="rt-readout" id="rtReadout"></div>
+      </div>
+    </div>
+  </section>
+  <script>
+  (function(){
+    var card = document.getElementById('rtCard');
+    var map = {rtBg:'--rt-bg', rtText:'--rt-text', rtBar:'--rt-bar', rtBtn:'--rt-btn'};
+    var readout = document.getElementById('rtReadout');
+    function val(id){ return document.getElementById(id).value.toUpperCase(); }
+    function apply(){
+      Object.keys(map).forEach(function(id){ card.style.setProperty(map[id], document.getElementById(id).value); });
+      readout.textContent = 'background ' + val('rtBg') + '  ·  type ' + val('rtText') +
+                            '  ·  status ' + val('rtBar') + '  ·  buttons ' + val('rtBtn');
+    }
+    Object.keys(map).forEach(function(id){ document.getElementById(id).addEventListener('input', apply); });
+    document.querySelectorAll('.rt-preset').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var c = btn.dataset.c.split(',');
+        document.getElementById('rtBg').value = c[0];
+        document.getElementById('rtText').value = c[1];
+        document.getElementById('rtBar').value = c[2];
+        document.getElementById('rtBtn').value = c[3];
+        apply();
+      });
+    });
+    apply();
+  })();
+  </script>
+
+  <footer>Generated from the app's source — accent color, timer colors, and button geometry mirror the SwiftUI implementation.</footer>
+</div>
+</body>
+</html>

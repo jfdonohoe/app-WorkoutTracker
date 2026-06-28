@@ -163,7 +163,7 @@ struct ScheduleWorkoutSheet: View {
                     Text(weekdaySymbols[wd - 1].prefix(1))
                         .font(.subheadline.bold())
                         .frame(width: 36, height: 36)
-                        .background(on ? Color.accentColor : Color(.secondarySystemFill),
+                        .background(on ? Color.accentColor : Theme.fill,
                                     in: Circle())
                         .foregroundStyle(on ? .white : .primary)
                 }

@@ -27,13 +27,16 @@ struct RoutineEditorView: View {
     /// Optional callback invoked after Save (used by the calendar instance-edit
     /// flow to ask "this instance vs. all future").
     var onCommit: (() -> Void)? = nil
+    /// When set (Calendar edit flow), show a Schedule section that edits this
+    /// routine's recurrence live. Nil elsewhere — routine definition has no schedule.
+    var scheduleRoutineId: UUID? = nil
 
     @State private var workingVersionId: UUID?
     @State private var didFork = false
     @State private var addExerciseSection: RoutineSection?
     @State private var editExercise: RoutineExercise?
     @State private var showDeleteConfirm = false
-    // Schedule (one ScheduleRule per routine, drives Today/Calendar).
+    // Schedule (Calendar edit only).
     @State private var scheduleEnabled = false
     @State private var recurrence = RecurrenceState()
     @State private var didLoadSchedule = false
@@ -69,7 +72,7 @@ struct RoutineEditorView: View {
                 }
             }
 
-            scheduleSection
+            if scheduleRoutineId != nil { scheduleSection }
 
             if let version = displayVersion {
                 restSection(version)
@@ -137,73 +140,6 @@ struct RoutineEditorView: View {
         }
     }
 
-    // MARK: - Schedule
-
-    @ViewBuilder
-    private var scheduleSection: some View {
-        Section {
-            Toggle("Repeat on a schedule", isOn: $scheduleEnabled)
-            if scheduleEnabled {
-                DatePicker("Starts", selection: $recurrence.startDate, displayedComponents: .date)
-                RecurrenceEditor(state: $recurrence)
-                Text(recurrence.summaryText).font(.caption).foregroundStyle(.secondary)
-            }
-        } header: {
-            Text("Schedule")
-        } footer: {
-            Text(scheduleEnabled
-                 ? "This routine will appear on Today and the Calendar on the matching days."
-                 : "Turn on to repeat this routine automatically on Today and the Calendar.")
-        }
-    }
-
-    /// Load the routine's existing schedule (if any) into the editor on appear.
-    private func loadSchedule() {
-        guard !didLoadSchedule else { return }
-        defer { didLoadSchedule = true }
-        let rid = routine.id
-        let rules = (try? context.fetch(
-            FetchDescriptor<ScheduleRule>(predicate: #Predicate { $0.routineId == rid && $0.deletedAt == nil })
-        )) ?? []
-        if let rule = rules.first {
-            scheduleEnabled = true
-            recurrence = RecurrenceState(rule: rule)
-        } else {
-            var seed = RecurrenceState()
-            seed.weekdays = [Calendar.current.component(.weekday, from: Date())]
-            seed.untilDate = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
-            recurrence = seed
-            scheduleEnabled = false
-        }
-    }
-
-    private func scheduleChanged() {
-        guard didLoadSchedule else { return } // ignore the initial load
-        // During creation the routine may still be cancelled (discarded), so we
-        // defer persistence to finishCreation(); persist live only when editing.
-        guard !isCreating else { return }
-        applySchedule()
-    }
-
-    /// Reconcile the routine's single ScheduleRule with the editor state.
-    private func applySchedule() {
-        let rid = routine.id
-        let rules = (try? context.fetch(
-            FetchDescriptor<ScheduleRule>(predicate: #Predicate { $0.routineId == rid && $0.deletedAt == nil })
-        )) ?? []
-        if scheduleEnabled {
-            if let rule = rules.first {
-                recurrence.apply(to: rule)
-                for extra in rules.dropFirst() { extra.deletedAt = .now } // keep one
-            } else {
-                context.insert(recurrence.buildRule(routineId: rid))
-            }
-        } else {
-            for rule in rules { rule.deletedAt = .now } // unschedule
-        }
-        try? context.save()
-    }
-
     // MARK: - Sections
 
     private func restSection(_ version: RoutineVersion) -> some View {
@@ -253,14 +189,25 @@ struct RoutineEditorView: View {
 
             ForEach(section.orderedExercises) { ex in
                 HStack {
-                    Button { editExercise = ex } label: {
+                    if section.type == .strength {
+                        // Strength: per-set plan, tap to edit sets/reps/weight.
+                        Button { editExercise = ex } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(ex.displayName).font(.body).foregroundStyle(.primary)
+                                Text("\(ex.effectivePlannedSets.count)×\(ex.plannedReps) @ \(Int(ex.plannedWeight)) lb")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .tint(.primary)
+                    } else {
+                        // Cardio / stretching: show the exercise definition's own
+                        // characteristics (duration/intensity, hold/sides/rounds).
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(ex.displayName).font(.body).foregroundStyle(.primary)
-                            Text("\(ex.effectivePlannedSets.count)×\(ex.plannedReps) @ \(Int(ex.plannedWeight)) lb")
+                            Text(ex.displayName).font(.body)
+                            Text(definition(ex.exerciseId)?.summary ?? section.type.displayName)
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
-                    .tint(.primary)
                     Spacer()
                     if !moveTargets.isEmpty {
                         Menu {
@@ -297,6 +244,80 @@ struct RoutineEditorView: View {
                 }
             }
         }
+    }
+
+    /// The library exercise behind a routine exercise (for its group-specific
+    /// characteristics — cardio/stretching don't store those on RoutineExercise).
+    private func definition(_ exId: UUID) -> Exercise? {
+        (try? context.fetch(FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == exId })))?.first
+    }
+
+    // MARK: - Schedule (Calendar edit only; edits live on scheduleRoutineId)
+
+    @ViewBuilder
+    private var scheduleSection: some View {
+        Section {
+            Toggle("Repeat on a schedule", isOn: $scheduleEnabled)
+            if scheduleEnabled {
+                DatePicker("Starts", selection: $recurrence.startDate, displayedComponents: .date)
+                RecurrenceEditor(state: $recurrence)
+                Text(recurrence.summaryText).font(.caption).foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Schedule")
+        } footer: {
+            Text(scheduleEnabled
+                 ? "This routine will appear on Today and the Calendar on the matching days."
+                 : "Turn on to repeat this routine automatically.")
+        }
+    }
+
+    private func loadSchedule() {
+        guard let rid = scheduleRoutineId, !didLoadSchedule else { return }
+        defer { didLoadSchedule = true }
+        let rules = (try? context.fetch(
+            FetchDescriptor<ScheduleRule>(predicate: #Predicate { $0.routineId == rid && $0.deletedAt == nil })
+        )) ?? []
+        if let rule = rules.first(where: { $0.isRecurring }) {
+            // Already on a recurring schedule → toggle on, show its recurrence.
+            scheduleEnabled = true
+            recurrence = RecurrenceState(rule: rule)
+        } else {
+            // No schedule, or only a one-off occurrence → toggle OFF by default.
+            let base = rules.first?.startDate ?? Date()
+            var seed = RecurrenceState()
+            seed.startDate = base
+            seed.weekdays = [Calendar.current.component(.weekday, from: base)]
+            seed.untilDate = Calendar.current.date(byAdding: .month, value: 1, to: base) ?? base
+            recurrence = seed
+            scheduleEnabled = false
+        }
+    }
+
+    private func scheduleChanged() {
+        guard scheduleRoutineId != nil, didLoadSchedule else { return }
+        applySchedule()
+    }
+
+    /// Reconcile the routine's RECURRING schedule with the editor state (live).
+    /// One-off occurrences (e.g. "Add one") are left untouched.
+    private func applySchedule() {
+        guard let rid = scheduleRoutineId else { return }
+        let rules = (try? context.fetch(
+            FetchDescriptor<ScheduleRule>(predicate: #Predicate { $0.routineId == rid && $0.deletedAt == nil })
+        )) ?? []
+        let recurring = rules.filter { $0.isRecurring }
+        if scheduleEnabled {
+            if let rule = recurring.first {
+                recurrence.apply(to: rule)
+                for extra in recurring.dropFirst() { extra.deletedAt = .now }
+            } else {
+                context.insert(recurrence.buildRule(routineId: rid))
+            }
+        } else {
+            for rule in recurring { rule.deletedAt = .now } // only recurring; keep one-offs
+        }
+        try? context.save()
     }
 
     // MARK: - Versioning guard
@@ -435,7 +456,6 @@ struct RoutineEditorView: View {
     private func finishCreation() {
         routine.name = routine.name.trimmingCharacters(in: .whitespaces)
         save()
-        applySchedule() // persist the schedule now that the routine is kept
         onCommit?()
         dismiss()
     }

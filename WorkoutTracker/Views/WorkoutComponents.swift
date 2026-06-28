@@ -94,30 +94,41 @@ struct RestTimerBar: View {
     @State private var showOverride = false
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text(restTimer.isFinished ? "Rest complete" : "Resting")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text(restTimer.formattedRemaining)
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(restTimer.isFinished ? .green : .primary)
-                }
-                Spacer()
-                if !restTimer.upcomingSummary.isEmpty {
-                    Text(restTimer.upcomingSummary)
-                        .font(.subheadline).foregroundStyle(.secondary)
-                        .multilineTextAlignment(.trailing)
-                }
-            }
+        let running = restTimer.isRunning
+        let finished = restTimer.isFinished
+        // Elapsed fraction (0 at the start of the rest → 1 when it ends). Driven
+        // directly by the timer so the olive fill grows from the very beginning.
+        let progress = CGFloat(min(max(restTimer.progress, 0), 1))
 
-            ProgressView(value: min(max(restTimer.progress, 0), 1))
+        VStack(spacing: 12) {
+            // Countdown display: a faint container with an olive fill revealed
+            // left→right. The type is dark over the container and flips to white
+            // where the fill has passed.
+            ZStack {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Theme.timerContainer
+                        Theme.stripeA.frame(width: geo.size.width * progress, height: geo.size.height)
+                    }
+                }
+                .animation(.linear(duration: 1), value: restTimer.progress)
+
+                display(white: false)
+                display(white: true)
+                    .mask {
+                        GeometryReader { geo in
+                            Rectangle()
+                                .frame(width: geo.size.width * progress, height: geo.size.height, alignment: .leading)
+                        }
+                        .animation(.linear(duration: 1), value: restTimer.progress)
+                    }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             HStack(spacing: 12) {
-                if restTimer.isRunning {
+                if running {
                     timerButton("Pause", "pause.fill") { restTimer.pause() }
-                } else if !restTimer.isFinished {
+                } else if !finished {
                     timerButton("Resume", "play.fill") { restTimer.resume() }
                 }
                 timerButton("Reset", "arrow.counterclockwise") { restTimer.reset() }
@@ -125,8 +136,33 @@ struct RestTimerBar: View {
                 timerButton("Done", "xmark") { restTimer.stop() }
             }
         }
+        .padding(12)
+        // Rounded container so the bar's bottom radius matches its top radius.
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    /// The countdown type. Rendered twice (dark base + white copy masked to the
+    /// revealed region) so it reads on both the faint container and the olive fill.
+    private func display(white: Bool) -> some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(restTimer.isFinished ? "Rest complete" : "Resting")
+                    .font(.caption)
+                    .foregroundStyle(white ? Color.white : Theme.secondaryLabel)
+                Text(restTimer.formattedRemaining)
+                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(white ? Color.white : Color.primary)
+            }
+            Spacer()
+            if !restTimer.upcomingSummary.isEmpty {
+                Text(restTimer.upcomingSummary)
+                    .font(.subheadline)
+                    .foregroundStyle(white ? Color.white : Theme.secondaryLabel)
+                    .multilineTextAlignment(.trailing)
+            }
+        }
         .padding()
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
     private func timerButton(_ title: String, _ icon: String, action: @escaping () -> Void) -> some View {
@@ -138,6 +174,7 @@ struct RestTimerBar: View {
             .frame(maxWidth: .infinity, minHeight: 44)
         }
         .buttonStyle(.bordered)
+        .tint(Theme.mutedForeground)
     }
 }
 
@@ -174,6 +211,7 @@ struct AddUnplannedExerciseSheet: View {
                         let last = rows.last ?? Row(reps: 10, weight: 0)
                         rows.append(Row(reps: last.reps, weight: last.weight))
                     } label: { Label("Add set (copies last)", systemImage: "plus.circle") }
+                    .disabled(rows.count >= 15)
                 }
                 Section("Cooldown between sets") {
                     Stepper("\(rest)s", value: $rest, in: 0...600, step: 15)

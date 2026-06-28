@@ -66,14 +66,17 @@ struct CalendarView: View {
             .sheet(isPresented: $showSchedule) { ScheduleWorkoutSheet(initialDate: selectedDay) }
             .sheet(item: $newRoutineToEdit) { r in
                 NavigationStack {
-                    RoutineEditorView(routine: r, isCreating: true)
+                    // On Save, add the new routine as a one-off on the selected day.
+                    RoutineEditorView(routine: r, isCreating: true, onCommit: { addOne(r, on: selectedDay) })
                 }
             }
             .sheet(item: $instanceEdit) { edit in
                 NavigationStack {
                     // Edit a CLONE; Save asks scope, Cancel discards the clone.
+                    // Recurrence edits apply LIVE to the original routine's schedule.
                     RoutineEditorView(routine: edit.clone, isCreating: true,
-                                      onCommit: { pendingInstanceScope = edit })
+                                      onCommit: { pendingInstanceScope = edit },
+                                      scheduleRoutineId: edit.originalId)
                 }
             }
             .confirmationDialog("Apply changes to…",
@@ -101,6 +104,16 @@ struct CalendarView: View {
         if let v = routine.activeVersion { repo.addSection(to: v, type: .strength) }
         try? context.save()
         newRoutineToEdit = routine
+    }
+
+    /// Add a single (one-off) scheduled occurrence of a routine on the given day.
+    private func addOne(_ routine: Routine, on day: Date) {
+        let d = cal.startOfDay(for: day)
+        let rule = ScheduleRule(routineId: routine.id, freq: .weekly, interval: 1,
+                                weekdays: [cal.component(.weekday, from: d)],
+                                startDate: d, untilDate: d, source: .user)
+        context.insert(rule)
+        try? context.save()
     }
 
     // MARK: - Header
@@ -204,14 +217,16 @@ struct CalendarView: View {
             } else {
                 // Tap a workout to open its summary (delete lives there now).
                 ForEach(daySessions) { session in
+                    // Day details surface "Abandoned" sessions as "Partial".
+                    let shown: SessionStatus = session.status == .abandoned ? .partial : session.status
                     NavigationLink {
                         WorkoutHistoryDetailView(session: session)
                     } label: {
                         HStack {
-                            Circle().fill(statusColor(session.status)).frame(width: 8, height: 8)
+                            Circle().fill(statusColor(shown)).frame(width: 8, height: 8)
                             VStack(alignment: .leading) {
                                 Text(session.routineName).foregroundStyle(.primary)
-                                Text(session.status.displayName).font(.caption).foregroundStyle(.secondary)
+                                Text(shown.displayName).font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
                             Image(systemName: "chevron.right").foregroundStyle(.tertiary)
@@ -222,13 +237,13 @@ struct CalendarView: View {
 
             // Anchored menu (popover) for the add action.
             Menu {
-                Section("Start now") {
+                Menu("Add one") {
                     ForEach(routines) { routine in
-                        Button(routine.name) { start(routine, on: selectedDay) }
+                        Button(routine.name) { addOne(routine, on: selectedDay) }
                     }
+                    Button { createRoutineAndEdit() } label: { Label("Create a Routine", systemImage: "plus") }
                 }
-                Button { createRoutineAndEdit() } label: { Label("Create new routine…", systemImage: "plus") }
-                Button { showSchedule = true } label: { Label("Schedule a workout…", systemImage: "calendar.badge.plus") }
+                Button { showSchedule = true } label: { Label("Schedule recurring…", systemImage: "calendar.badge.plus") }
             } label: {
                 Label("Add a workout", systemImage: "plus.circle")
             }
@@ -237,7 +252,7 @@ struct CalendarView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: - Edit a future scheduled routine

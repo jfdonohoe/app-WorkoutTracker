@@ -23,6 +23,17 @@
 import Foundation
 import SwiftData
 
+/// Identifies one group INSTANCE inside a workout: a section type plus which
+/// group of that type it is (0, 1, …). Two strength blocks are `(.strength, 0)`
+/// and `(.strength, 1)`.
+struct SessionGroupKey: Hashable, Identifiable {
+    let type: SectionType
+    let index: Int
+    var id: String { "\(type.rawValue)#\(index)" }
+    /// Group heading — just the type name (a workout can show "Strength" twice).
+    var displayName: String { type.displayName }
+}
+
 @Model
 final class WorkoutSession {
     var id: UUID
@@ -58,8 +69,8 @@ final class WorkoutSession {
 
     /// Session-level cooldown defaults (seconds), editable on the workout UI.
     /// Seeded from the routine at start; the live timers use these values.
-    /// Defaults: 3 minutes between exercises, 1 minute between sets.
-    var restBetweenExercises: Int = 180
+    /// Defaults: 1 minute between exercises, 1 minute between sets.
+    var restBetweenExercises: Int = 60
     var restBetweenSets: Int = 60
 
     @Relationship(deleteRule: .cascade, inverse: \WorkoutSessionExercise.session)
@@ -84,6 +95,47 @@ final class WorkoutSession {
 
     var orderedExercises: [WorkoutSessionExercise] {
         exercises.sorted { $0.order < $1.order }
+    }
+
+    /// The group INSTANCES present (a section type + its group index), ordered by
+    /// each group's earliest exercise `order`. Supports more than one group of the
+    /// same type and lets a whole group block be reordered in the workout editor.
+    var orderedGroupKeys: [SessionGroupKey] {
+        let grouped = Dictionary(grouping: exercises) {
+            SessionGroupKey(type: $0.sectionType, index: $0.groupIndex)
+        }
+        return grouped.keys.sorted { a, b in
+            let minA = grouped[a]?.map(\.order).min() ?? Int.max
+            let minB = grouped[b]?.map(\.order).min() ?? Int.max
+            if minA != minB { return minA < minB }
+            return a.type.rawValue == b.type.rawValue ? a.index < b.index
+                                                      : a.type.rawValue < b.type.rawValue
+        }
+    }
+
+    /// Exercises in a specific group instance, in list order.
+    func exercises(in key: SessionGroupKey) -> [WorkoutSessionExercise] {
+        orderedExercises.filter { $0.sectionType == key.type && $0.groupIndex == key.index }
+    }
+
+    /// Highest group index currently used by `type` (-1 if none), so a new group
+    /// of that type can be created with the next index.
+    func maxGroupIndex(of type: SectionType) -> Int {
+        exercises.filter { $0.sectionType == type }.map(\.groupIndex).max() ?? -1
+    }
+
+    /// Heading for a group: just the type name normally; numbered ("Strength 1",
+    /// "Strength 2") when more than one group shares that type.
+    func groupTitle(for key: SessionGroupKey) -> String {
+        let sameType = orderedGroupKeys.filter { $0.type == key.type }
+        guard sameType.count > 1, let pos = sameType.firstIndex(of: key) else { return key.displayName }
+        return "\(key.displayName) \(pos + 1)"
+    }
+
+    /// Every exercise is fully done (all strength sets completed, and every
+    /// cardio/stretching exercise marked complete). Empty workout = not complete.
+    var allExercisesComplete: Bool {
+        !exercises.isEmpty && exercises.allSatisfy(\.isFullyCompleted)
     }
 
     /// Workout duration from start to end timecode, if both are present.
@@ -136,11 +188,26 @@ final class WorkoutSessionExercise {
     /// Snapshot of the name and section at start time.
     var name: String
     var sectionTypeRaw: String
+    /// Which group INSTANCE of `sectionType` this belongs to. Lets a workout hold
+    /// more than one group of the same type (e.g. two separate strength blocks).
+    /// Defaults to 0, so existing data is one group per type.
+    var groupIndex: Int = 0
     var order: Int
     var plannedRestBetweenSets: Int
     var notes: String
     /// True if the user added this exercise spontaneously during the workout.
     var isAddedDuringWorkout: Bool
+
+    // Group-specific snapshot (defaults so this is a lightweight schema addition).
+    // Cardio uses durationMinutes + intensity; stretching uses hold/sides/rounds.
+    var durationMinutes: Int = 0
+    var intensityRaw: String = ""
+    var holdSeconds: Int = 0
+    var sides: Int = 1
+    var rounds: Int = 1
+    /// Completion for groups WITHOUT sets (cardio / stretching). Strength uses
+    /// per-set completion; this is nil until the user marks the exercise done.
+    var markedCompleteAt: Date?
 
     @Relationship(deleteRule: .cascade, inverse: \WorkoutSessionSet.exercise)
     var sets: [WorkoutSessionSet]
@@ -152,23 +219,34 @@ final class WorkoutSessionExercise {
         get { SectionType(rawValue: sectionTypeRaw) ?? .strength }
         set { sectionTypeRaw = newValue.rawValue }
     }
+    /// Cardio intensity (nil when unset). Stored as a stable raw string.
+    var intensity: CardioIntensity? {
+        get { CardioIntensity(rawValue: intensityRaw) }
+        set { intensityRaw = newValue?.rawValue ?? "" }
+    }
+    /// Set-based (strength) vs. mark-complete (cardio / stretching).
+    var hasSets: Bool { !sets.isEmpty }
 
     var orderedSets: [WorkoutSessionSet] {
         sets.sorted { $0.index < $1.index }
     }
 
-    /// An exercise is "skipped" when its first set was never completed.
+    /// "Skipped" = never completed. Set-based: first set not done. Non-set
+    /// (cardio/stretching): never marked complete.
     var isSkipped: Bool {
+        if !hasSets { return markedCompleteAt == nil }
         guard let first = orderedSets.first else { return true }
         return !first.isCompleted
     }
-    /// Partially incomplete: at least one set done but not all.
+    /// Partially incomplete: at least one set done but not all (set-based only).
     var isPartiallyIncomplete: Bool {
+        guard hasSets else { return false }
         let done = sets.filter(\.isCompleted).count
         return done > 0 && done < sets.count
     }
     var isFullyCompleted: Bool {
-        !sets.isEmpty && sets.allSatisfy(\.isCompleted)
+        if !hasSets { return markedCompleteAt != nil }
+        return sets.allSatisfy(\.isCompleted)
     }
 
     init(id: UUID = UUID(),

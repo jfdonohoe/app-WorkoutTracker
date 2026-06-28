@@ -5,7 +5,7 @@
 #
 # If the .xcodeproj ever fails to open on your machine, you can regenerate it:
 #   brew install xcodegen
-#   cd "Workout iOS App"
+#   cd "WorkoutApp"
 #   xcodegen generate
 #
 name: WorkoutTracker

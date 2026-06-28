@@ -24,15 +24,14 @@ struct TodayWorkoutView: View {
     @Query(filter: #Predicate<ScheduleRule> { $0.deletedAt == nil }) private var schedules: [ScheduleRule]
     @Query private var sessions: [WorkoutSession]
 
-    @State private var preEditVersionByRoutine: [UUID: UUID] = [:]
-    @State private var editPlanned: RoutineExercise?
-    @State private var editPlannedRoutineId: UUID?
     @State private var workoutSession: WorkoutSession?
     @State private var pendingSummary: WorkoutSession?
     @State private var summarySession: WorkoutSession?
-    @State private var showSchedule = false
     @State private var newRoutineToEdit: Routine?
     @State private var pendingDelete: DeleteTarget?
+    /// What to do once a newly created routine is saved.
+    private enum CreateMode { case startNow, laterToday }
+    @State private var createMode: CreateMode = .laterToday
 
     private let cal = Calendar.current
     private let scheduleService = ScheduleService()
@@ -105,21 +104,10 @@ struct TodayWorkoutView: View {
                         WorkoutHistoryDetailView(session: s, isSummary: true, onClose: { summarySession = nil })
                     }
                 }
-                .sheet(isPresented: $showSchedule) { ScheduleWorkoutSheet() }
                 .sheet(item: $newRoutineToEdit) { r in
                     NavigationStack {
-                        // A routine created from Today is added to today's workout on Save.
-                        RoutineEditorView(routine: r, isCreating: true, onCommit: { addRoutineToToday(r) })
-                    }
-                }
-                .sheet(item: $editPlanned) { ex in
-                    SetBuilderSheet(title: ex.displayName,
-                                    machineId: ex.machineId,
-                                    exerciseId: ex.exerciseId,
-                                    defaultRest: ex.restBetweenSets,
-                                    initialSets: ex.effectivePlannedSets,
-                                    initialRest: ex.restBetweenSets) { sets, _ in
-                        savePlannedSets(to: ex, sets: sets)
+                        // On Save: Start Now → start it; Later Today → add to today.
+                        RoutineEditorView(routine: r, isCreating: true, onCommit: { handleCreatedRoutine(r) })
                     }
                 }
                 .confirmationDialog(pendingDelete.map { "Delete \($0.title)?" } ?? "Delete workout?",
@@ -157,61 +145,54 @@ struct TodayWorkoutView: View {
     // MARK: - Cards
 
     private func plannedSection(_ routine: Routine) -> some View {
-        let version = preVersion(for: routine)
-        // Show exercises from ALL groupings (strength, cardio, stretching, …),
-        // ordered by section then position.
-        let exercises = (version?.orderedSections ?? []).flatMap { $0.orderedExercises }
-
+        // Title + exercise count live INSIDE the card (a row), not as a header.
+        let count = exerciseCount(routine)
         return Section {
-            // Exercise rows (with chevrons), then a full-width primary button as
-            // the final row of the inset-grouped section (matches the mockup).
-            ForEach(exercises) { ex in
-                Button {
-                    editPlannedRoutineId = routine.id
-                    editPlanned = resolvePlanned(ex, in: routine)
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(ex.displayName).foregroundStyle(.primary)
-                            Text("\(ex.section?.type.displayName ?? "") · \(ex.effectivePlannedSets.count) set\(ex.effectivePlannedSets.count == 1 ? "" : "s")")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-                    }
-                }
-                .tint(.primary)
-            }
-            .onMove { offsets, dest in movePlanned(routine, offsets, dest) }
-
+            titleRow(routine.name,
+                     subtitle: "\(count) exercise\(count == 1 ? "" : "s")",
+                     target: DeleteTarget(title: routine.name, routineId: routine.id, session: nil))
             Button { start(routine) } label: {
                 BigActionLabel(title: "Start Workout", systemImage: "play.fill")
             }
             .buttonStyle(.borderedProminent)
-        } header: {
-            cardHeader(routine.name,
-                       target: DeleteTarget(title: routine.name, routineId: routine.id, session: nil))
         }
+    }
+
+    /// In-card title row with an optional subtitle and the delete menu.
+    private func titleRow(_ title: String, subtitle: String?, target: DeleteTarget) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.headline)
+                if let subtitle {
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Menu {
+                Button(role: .destructive) { requestDelete(target) } label: {
+                    Label("Delete workout", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Total exercises across all of the routine's groupings.
+    private func exerciseCount(_ routine: Routine) -> Int {
+        (routine.activeVersion?.orderedSections ?? []).reduce(0) { $0 + $1.orderedExercises.count }
     }
 
     private func inProgressSection(_ session: WorkoutSession) -> some View {
         Section {
-            let sets = session.exercises.flatMap(\.sets)
-            let done = sets.filter(\.isCompleted).count
-            let statusText = session.isLocked ? "\(session.status.displayName) — \(done)/\(sets.count) sets" : "In progress — \(done)/\(sets.count) sets"
+            // Progress counts EXERCISES (not sets); no exercise list on Today.
+            let total = session.exercises.count
+            let done = session.exercises.filter(\.isFullyCompleted).count
+            let statusText = session.isLocked
+                ? "\(session.status.displayName) — \(done)/\(total) exercises"
+                : "In progress — \(done)/\(total) exercises"
             Label(statusText, systemImage: "clock")
                 .font(.subheadline).foregroundStyle(.secondary)
-
-            ForEach(session.orderedExercises) { ex in
-                HStack {
-                    Image(systemName: ex.isFullyCompleted ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(ex.isFullyCompleted ? .green : .secondary)
-                    Text(ex.name)
-                    Spacer()
-                    Text("\(ex.sets.filter(\.isCompleted).count)/\(ex.sets.count)")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
 
             Button { resume(session) } label: {
                 BigActionLabel(title: "Resume Workout", systemImage: "play.fill")
@@ -240,8 +221,11 @@ struct TodayWorkoutView: View {
 
             Button { summarySession = session } label: {
                 BigActionLabel(title: "View Summary", systemImage: "doc.text.magnifyingglass")
+                    .foregroundStyle(.white)
             }
             .buttonStyle(.borderedProminent)
+            // Secondary action → muted foreground fill (donohoeux styleguide).
+            .tint(Theme.mutedForeground)
         } header: {
             cardHeader(session.routineName,
                        target: DeleteTarget(title: session.routineName, routineId: session.routineId, session: session))
@@ -282,18 +266,24 @@ struct TodayWorkoutView: View {
         }
     }
 
-    /// Shared add-workout menu: start an existing routine now, create a new
-    /// routine, or schedule for later.
+    /// Add-workout menu: "Start Now" runs a routine immediately; "Later Today"
+    /// adds it to today's list to start later. Each offers the routine list plus
+    /// "Create a Routine".
     @ViewBuilder
     private func addWorkoutMenu(title: String, prominent: Bool) -> some View {
         let menu = Menu {
-            Section("Start now") {
+            Menu("Start Now") {
                 ForEach(routines) { routine in
                     Button(routine.name) { start(routine) }
                 }
+                Button { createRoutine(mode: .startNow) } label: { Label("Create a Routine", systemImage: "plus") }
             }
-            Button { createRoutineAndEdit() } label: { Label("Create new routine…", systemImage: "plus") }
-            Button { showSchedule = true } label: { Label("Schedule for later…", systemImage: "calendar.badge.plus") }
+            Menu("Later Today") {
+                ForEach(routines) { routine in
+                    Button(routine.name) { addRoutineToToday(routine) }
+                }
+                Button { createRoutine(mode: .laterToday) } label: { Label("Create a Routine", systemImage: "plus") }
+            }
         } label: {
             BigActionLabel(title: title, systemImage: "plus")
         }
@@ -306,48 +296,6 @@ struct TodayWorkoutView: View {
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
         }
-    }
-
-    // MARK: - Pre-start version safety (planned editing)
-
-    private func preVersion(for routine: Routine) -> RoutineVersion? {
-        if let id = preEditVersionByRoutine[routine.id] {
-            return routines.flatMap(\.versions).first { $0.id == id }
-        }
-        return routine.activeVersion
-    }
-    private func ensurePreEditable(_ routine: Routine) {
-        guard preEditVersionByRoutine[routine.id] == nil, let active = routine.activeVersion else { return }
-        preEditVersionByRoutine[routine.id] = repo.isReferencedBySession(active)
-            ? repo.makeNewVersion(of: routine).id : active.id
-    }
-    private func resolvePlanned(_ ex: RoutineExercise, in routine: Routine) -> RoutineExercise? {
-        let all = preVersion(for: routine)?.sections.flatMap(\.exercises) ?? []
-        return all.first { $0.id == ex.id } ?? all.first { $0.exerciseId == ex.exerciseId && $0.order == ex.order }
-    }
-    private func savePlannedSets(to ex: RoutineExercise, sets: [(reps: Int, weight: Double)]) {
-        guard let rid = editPlannedRoutineId, let routine = routines.first(where: { $0.id == rid }) else { return }
-        ensurePreEditable(routine)
-        guard let target = resolvePlanned(ex, in: routine) else { return }
-        let routineRest = preVersion(for: routine)?.defaultRestBetweenSets ?? target.restBetweenSets
-        repo.setPlannedSets(target, sets: sets, restBetweenSets: routineRest)
-        try? context.save()
-    }
-    private func movePlanned(_ routine: Routine, _ offsets: IndexSet, _ dest: Int) {
-        ensurePreEditable(routine)
-        guard let version = preVersion(for: routine) else { return }
-        // Reorder across the flattened (all-groupings) list, then reassign each
-        // exercise's order within its own section based on the new positions.
-        var all = version.orderedSections.flatMap { $0.orderedExercises }
-        all.move(fromOffsets: offsets, toOffset: dest)
-        var perSectionIndex: [UUID: Int] = [:]
-        for ex in all {
-            guard let sid = ex.section?.id else { continue }
-            let idx = perSectionIndex[sid] ?? 0
-            ex.order = idx
-            perSectionIndex[sid] = idx + 1
-        }
-        try? context.save()
     }
 
     // MARK: - Start / summary / delete
@@ -428,11 +376,20 @@ struct TodayWorkoutView: View {
     }
 
     /// Create a new routine (unnamed — naming is the first step) and open the
-    /// creation editor with Cancel/Save.
-    private func createRoutineAndEdit() {
+    /// creation editor. `mode` decides what happens on Save.
+    private func createRoutine(mode: CreateMode) {
+        createMode = mode
         let routine = repo.createRoutine(name: "")
         if let v = routine.activeVersion { repo.addSection(to: v, type: .strength) }
         try? context.save()
         newRoutineToEdit = routine
+    }
+
+    /// After a created routine is saved: start it now, or add it to today.
+    private func handleCreatedRoutine(_ routine: Routine) {
+        switch createMode {
+        case .startNow: start(routine)
+        case .laterToday: addRoutineToToday(routine)
+        }
     }
 }

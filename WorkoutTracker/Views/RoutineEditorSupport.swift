@@ -44,7 +44,7 @@ struct RoutineExerciseEditSheet: View {
         NavigationStack {
             Form {
                 Section(exercise.displayName) {
-                    Stepper("Sets: \(draft.setCount)", value: $draft.setCount, in: 1...10)
+                    Stepper("Sets: \(draft.setCount)", value: $draft.setCount, in: 1...15)
                     Stepper("Weight: \(Int(draft.plannedWeight)) lb", value: $draft.plannedWeight, in: 0...2000, step: 5)
                     Stepper("Reps: \(draft.plannedReps)", value: $draft.plannedReps, in: 1...100)
                     Stepper("Rest between sets: \(draft.restBetweenSets)s", value: $draft.restBetweenSets, in: 0...600, step: 15)

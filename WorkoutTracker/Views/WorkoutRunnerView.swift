@@ -22,20 +22,22 @@ struct WorkoutRunnerView: View {
     var onFinished: () -> Void = {}
 
     @State private var openExercise: WorkoutSessionExercise?
-    @State private var showAddExercise = false
     @State private var showFinishConfirm = false
 
     private var repo: WorkoutRepository { WorkoutRepository(context) }
 
-    /// True when every planned set is completed (the workout would lock as
-    /// "completed" rather than partial/abandoned).
-    private var allSetsComplete: Bool {
-        let sets = session.exercises.flatMap(\.sets)
-        return !sets.isEmpty && sets.allSatisfy(\.isCompleted)
-    }
+    /// True when every exercise is fully done — all strength sets completed AND
+    /// every cardio/stretching exercise marked complete.
+    private var allSetsComplete: Bool { session.allExercisesComplete }
+
 
     var body: some View {
-        List {
+        // Depend on the session's `updatedAt` scalar so the runner reliably
+        // re-renders after a presented sheet (exercise sheet / editor) adds,
+        // reorders, or completes exercises — SwiftData to-many relationship
+        // changes alone don't always notify a parent-held view.
+        let _ = session.updatedAt
+        return List {
             if restTimer.isRunning || restTimer.isFinished {
                 Section {
                     RestTimerBar().environmentObject(restTimer)
@@ -46,15 +48,14 @@ struct WorkoutRunnerView: View {
 
             Section { progressRow }
 
-            Section("Exercises") {
-                ForEach(session.orderedExercises) { ex in
-                    Button { openExercise = ex } label: { exerciseRow(ex) }
-                        .tint(.primary)
-                }
-                .onMove(perform: moveExercises) // press-and-hold to reorder
-
-                Button { showAddExercise = true } label: {
-                    Label("Add exercise", systemImage: "plus.circle")
+            // One section per group instance present, in the order chosen in the
+            // editor. Tapping opens the logging sheet; structural editing is in Edit.
+            ForEach(session.orderedGroupKeys) { key in
+                Section(session.groupTitle(for: key)) {
+                    ForEach(session.exercises(in: key)) { ex in
+                        Button { openExercise = ex } label: { exerciseRow(ex) }
+                            .tint(.primary)
+                    }
                 }
             }
 
@@ -76,46 +77,44 @@ struct WorkoutRunnerView: View {
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(.borderedProminent)
-                // Completed → green "Finish Workout"; abandoned/incomplete →
+                // Completed → brand green "Finish Workout"; abandoned/incomplete →
                 // black "Stop Workout".
-                .tint(allSetsComplete ? .green : .black)
+                .tint(allSetsComplete ? Theme.accent : .black)
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
+                // Stop-and-lock confirmation, attached to the button that triggers it.
+                .confirmationDialog(allSetsComplete ? "Finish this workout?" : "Stop this workout?",
+                                    isPresented: $showFinishConfirm, titleVisibility: .visible) {
+                    Button(allSetsComplete ? "Finish & lock" : "Stop & lock", role: .destructive) { finish() }
+                    Button("Keep going", role: .cancel) {}
+                } message: {
+                    Text(allSetsComplete
+                         ? "Completed workouts become permanent history and can only be changed with corrections."
+                         : "This workout isn't finished. Stopping locks it as-is; you can't add to it later.")
+                }
             }
         }
         .sheet(item: $openExercise) { ex in
             SessionExerciseSheet(session: session, exercise: ex,
-                                 onExerciseCompleted: { startBetweenExercisesRest(after: ex) })
+                                 onExerciseCompleted: { startBetweenExercisesRest(after: ex) },
+                                 onAdvance: { next in openExercise = next })
                 .environmentObject(restTimer)
-        }
-        .sheet(isPresented: $showAddExercise) {
-            ExercisePickerSheet { exercise in
-                addFromLibrary(exercise)
-            }
-        }
-        .confirmationDialog(allSetsComplete ? "Finish this workout?" : "Stop this workout?",
-                            isPresented: $showFinishConfirm, titleVisibility: .visible) {
-            Button(allSetsComplete ? "Finish & lock" : "Stop & lock", role: .destructive) { finish() }
-            Button("Keep going", role: .cancel) {}
-        } message: {
-            Text(allSetsComplete
-                 ? "Completed workouts become permanent history and can only be changed with corrections."
-                 : "This workout isn't finished. Stopping locks it as-is; you can't add to it later.")
+                .id(ex.id)   // fresh state when auto-advancing to the next exercise
         }
     }
 
     // MARK: - Rows
 
     private var progressRow: some View {
-        let sets = session.exercises.flatMap(\.sets)
-        let done = sets.filter(\.isCompleted).count
+        let total = session.exercises.count
+        let done = session.exercises.filter(\.isFullyCompleted).count
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(session.status.displayName).font(.headline)
                 Spacer()
-                Text("\(done)/\(sets.count) sets").foregroundStyle(.secondary)
+                Text("\(done)/\(total) exercise\(total == 1 ? "" : "s")").foregroundStyle(.secondary)
             }
-            ProgressView(value: sets.isEmpty ? 0 : Double(done) / Double(sets.count))
+            ProgressView(value: total == 0 ? 0 : Double(done) / Double(total))
         }
     }
 
@@ -126,7 +125,7 @@ struct WorkoutRunnerView: View {
                 .foregroundStyle(ex.isFullyCompleted ? .green : .secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text(ex.name).font(.body)
-                Text("\(ex.sets.count) set\(ex.sets.count == 1 ? "" : "s")")
+                Text(exerciseSubtitle(ex))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
@@ -134,14 +133,20 @@ struct WorkoutRunnerView: View {
         }
     }
 
-    // MARK: - Actions
-
-    private func moveExercises(_ offsets: IndexSet, _ destination: Int) {
-        var ordered = session.orderedExercises
-        ordered.move(fromOffsets: offsets, toOffset: destination)
-        repo.reorder(session, orderedIds: ordered.map(\.id))
-        try? context.save()
+    private func exerciseSubtitle(_ ex: WorkoutSessionExercise) -> String {
+        switch ex.sectionType {
+        case .strength:
+            return "\(ex.sets.count) set\(ex.sets.count == 1 ? "" : "s")"
+        case .cardio:
+            var s = "\(ex.durationMinutes) min"
+            if let i = ex.intensity { s += " · \(i.displayName)" }
+            return s
+        case .stretching:
+            return "Hold \(ex.holdSeconds)s · \(ex.rounds) round\(ex.rounds == 1 ? "" : "s")"
+        }
     }
+
+    // MARK: - Actions
 
     /// Start the between-exercises cooldown after an exercise is completed and
     /// its sheet closes (only if another exercise still needs work).
@@ -150,22 +155,6 @@ struct WorkoutRunnerView: View {
         if let next = session.orderedExercises.first(where: { !$0.isFullyCompleted }) {
             restTimer.start(seconds: session.restBetweenExercises, upcoming: "Next: \(next.name)")
         }
-    }
-
-    private func addFromLibrary(_ exercise: Exercise) {
-        let defaults = exercise.effectiveDefaultSets
-        let sets = defaults.isEmpty ? [(reps: 10, weight: 0.0)] : defaults
-        let se = repo.addUnplannedExercise(to: session, name: exercise.name, sets: sets,
-                                           rest: exercise.defaultRest, machineId: exercise.machineId)
-        // Snapshot the machine's current settings into the new session exercise.
-        if let machineId = exercise.machineId, let machine = repo.fetchMachine(machineId) {
-            for def in machine.activeSettings {
-                _ = repo.addSessionSetting(to: se, label: def.label,
-                                           numericValue: def.numericValue, otherText: def.otherText,
-                                           alsoAddToMachine: false)
-            }
-        }
-        try? context.save()
     }
 
     private func finish() {

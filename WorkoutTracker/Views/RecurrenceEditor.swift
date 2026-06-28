@@ -4,11 +4,11 @@
 //
 //  Reusable RRULE-style recurrence editor (frequency, interval, weekday picker,
 //  end condition) plus a value model that converts to/from a ScheduleRule.
-//  Used by the routine create/edit screen to set the routine's schedule.
+//  Used by the routine editor WHEN opened from the Calendar, to add/edit a
+//  routine's recurrence. (Routine definition editing elsewhere has no schedule.)
 //
 //  The editor's ForEach uses only STATIC ranges (RecurrenceFrequency.allCases,
-//  1...7), never a @State collection, so it's safe to embed in a pushed view
-//  (see the ForEach/@State freeze note for this project).
+//  1...7), never a @State collection, so it's safe to embed in any view.
 //
 
 import SwiftUI
@@ -27,21 +27,14 @@ struct RecurrenceState: Equatable {
 
     init() {}
 
-    /// Load from an existing rule (for editing).
     init(rule: ScheduleRule) {
         startDate = rule.startDate
         freq = rule.freq
         interval = rule.interval
         weekdays = Set(rule.weekdays)
-        if let until = rule.untilDate {
-            endMode = .onDate
-            untilDate = until
-        } else if let c = rule.count {
-            endMode = .after
-            count = c
-        } else {
-            endMode = .never
-        }
+        if let until = rule.untilDate { endMode = .onDate; untilDate = until }
+        else if let c = rule.count { endMode = .after; count = c }
+        else { endMode = .never }
     }
 
     var intervalUnit: String {
@@ -52,8 +45,6 @@ struct RecurrenceState: Equatable {
         }
     }
 
-    // MARK: - Normalized RRULE fields
-
     private var normalizedStart: Date { Calendar.current.startOfDay(for: startDate) }
     private var resolvedWeekdays: [Int] {
         guard freq == .weekly else { return [] }
@@ -63,7 +54,6 @@ struct RecurrenceState: Equatable {
     private var resolvedCount: Int? { endMode == .after ? count : nil }
     private var resolvedMonthDay: Int? { freq == .monthly ? Calendar.current.component(.day, from: normalizedStart) : nil }
 
-    /// Build a brand-new ScheduleRule for the given routine.
     func buildRule(routineId: UUID) -> ScheduleRule {
         ScheduleRule(routineId: routineId, freq: freq, interval: interval,
                      weekdays: resolvedWeekdays, startDate: normalizedStart,
@@ -71,7 +61,6 @@ struct RecurrenceState: Equatable {
                      byMonthDay: resolvedMonthDay, source: .user)
     }
 
-    /// Update an existing ScheduleRule in place (preserves its id + exceptions).
     func apply(to rule: ScheduleRule) {
         rule.freq = freq
         rule.interval = interval
@@ -84,7 +73,6 @@ struct RecurrenceState: Equatable {
         rule.updatedAt = .now
     }
 
-    /// Human-readable summary (e.g. "Every 2 weeks on Mon, Wed").
     var summaryText: String { buildRule(routineId: UUID()).summaryText }
 }
 
@@ -127,7 +115,7 @@ struct RecurrenceEditor: View {
                     Text(weekdaySymbols[wd - 1].prefix(1))
                         .font(.subheadline.bold())
                         .frame(width: 36, height: 36)
-                        .background(on ? Color.accentColor : Color(.secondarySystemFill), in: Circle())
+                        .background(on ? Color.accentColor : Theme.fill, in: Circle())
                         .foregroundStyle(on ? .white : .primary)
                 }
                 .buttonStyle(.plain)

@@ -118,9 +118,21 @@ struct WorkoutHistoryDetailView: View {
                     row(s.label, s.displayValue)
                 }
             }
-            ForEach(ex.orderedSets) { set in
-                setRow(ex, set)
+            // Show the prescription that matches the exercise's group.
+            switch ex.sectionType {
+            case .strength:
+                ForEach(ex.orderedSets) { set in
+                    setRow(ex, set)
+                }
+            case .cardio:
+                row("Duration", "\(ex.durationMinutes) min")
+                if let i = ex.intensity { row("Intensity", i.displayName) }
+            case .stretching:
+                row("Hold", "\(ex.holdSeconds)s")
+                row("Sides", "\(ex.sides)")
+                row("Rounds", "\(ex.rounds)")
             }
+            if !ex.notes.isEmpty { row("Notes", ex.notes) }
         } header: {
             HStack {
                 Text(ex.name)

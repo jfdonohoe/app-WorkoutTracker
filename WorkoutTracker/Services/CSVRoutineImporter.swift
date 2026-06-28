@@ -12,30 +12,32 @@
 //  invalid, nothing at all is imported and every problem is reported. This makes
 //  it impossible to import incorrect data.
 //
+//  A routine is a DEFINITION only — it does not carry scheduling. Scheduling is a
+//  separate "event" (ScheduleRule) created from the Calendar/Today views, so this
+//  template has no recurrence columns.
+//
 //  Expected columns (header row, case-insensitive, any order):
 //      routine, group, exercise, machine, machine_settings,
-//      sets, reps, weight, duration_min, intensity,
-//      hold_seconds, sides, rounds, notes,
-//      recurrence, interval, weekday, month_day, count, start_date
+//      set1_reps, set1_weight, set2_reps, set2_weight, … setN_reps, setN_weight,
+//      duration_min, intensity, hold_seconds, sides, rounds,
+//      set_cooldown, exercise_cooldown, notes
 //  Always required: routine, group, exercise.
+//  Optional cooldowns (seconds): set_cooldown = rest between sets for THAT
+//  exercise (blank → routine default); exercise_cooldown = rest between exercises
+//  for the routine (one routine-level value; if rows differ, the largest is used).
 //  Required per group:
-//      • strength    → sets (>0), reps (>0), weight (>=0)
-//      • cardio      → duration_min (>0), intensity (low|moderate|high)
-//      • stretching  → hold_seconds (>0), sides (1 or 2), rounds (>0)
+//      • strength    → per-set columns are OPTIONAL; if blank, the exercise's own
+//                       default sets (from the library) are used. Each filled setK
+//                       pair is one planned set (sets can differ in reps/weight).
+//      • cardio      → duration_min / intensity are OPTIONAL (blank → exercise's
+//                       own duration/intensity); validated if present
+//      • stretching  → nothing extra (exercise name only; hold_seconds, sides,
+//                       rounds are optional and default when blank)
+//  In short: a routine row only needs routine + group + exercise; the exercise's
+//  saved definition supplies any prescription left blank.
 //  Optional everywhere: machine, machine_settings, notes.
 //  machine_settings format: "Label=Value; Label2=Value2" (max 4). A numeric
 //  value 1...15 becomes a slider pick; anything else is stored as free text.
-//
-//  Optional SCHEDULE (set on any ONE row of a routine; leave blank elsewhere):
-//      • recurrence → daily | weekly | monthly  (blank = not scheduled)
-//      • interval   → "every N" (positive int, default 1)
-//      • weekday    → weekly only; one or more day names separated by space/'|'/'/'
-//                     (e.g. "Mon Wed Fri" or "monday"); 1=Sun…7=Sat order
-//      • month_day  → monthly only; 1...31 (blank = the start date's day)
-//      • count      → optional total number of occurrences (positive int)
-//      • start_date → optional anchor "yyyy-MM-dd" (blank = today)
-//  If two rows of the same routine give DIFFERENT schedules, the import is
-//  rejected (ambiguous). Identical repeats are allowed.
 //
 //  One row = one exercise in a routine. Rows with the same routine name are
 //  grouped into one routine; rows with the same exercise name + group share one
@@ -48,14 +50,25 @@ import SwiftData
 struct CSVImportReport {
     var routinesCreated = 0
     var exercisesAdded = 0
+    /// Items that already existed and were ignored (import only adds new items).
+    var routinesSkipped = 0
+    var exercisesSkipped = 0
     /// Always empty on success (import is all-or-nothing); kept for compatibility.
     var rowErrors: [String] = []
 
     var summary: String {
         var parts: [String] = []
-        if routinesCreated > 0 { parts.append("\(routinesCreated) routine(s)") }
+        if routinesCreated > 0 || routinesSkipped > 0 { parts.append("\(routinesCreated) routine(s)") }
         parts.append("\(exercisesAdded) exercise(s)")
-        return "Imported " + parts.joined(separator: ", ") + "."
+        var s = "Imported " + parts.joined(separator: ", ") + "."
+        let skipped = routinesSkipped + exercisesSkipped
+        if skipped > 0 {
+            var sk: [String] = []
+            if routinesSkipped > 0 { sk.append("\(routinesSkipped) routine(s)") }
+            if exercisesSkipped > 0 { sk.append("\(exercisesSkipped) exercise(s)") }
+            s += " Skipped " + sk.joined(separator: ", ") + " that already existed."
+        }
+        return s
     }
 }
 
@@ -70,8 +83,8 @@ enum CSVImportError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notCSV: return "That file isn't a .csv file. Please choose a CSV."
-        case .empty: return "The CSV file is empty."
-        case .unreadable: return "The file could not be read as text."
+        case .empty: return "The CSV has a header but no data rows to import."
+        case .unreadable: return "Couldn't read the file's contents. If it's stored in iCloud or Google Drive, open it once in the Files app so it downloads, then import again."
         case .missingColumns(let cols):
             return "The CSV is missing required column(s): \(cols.joined(separator: ", "))."
         case .invalidData(let errs):
@@ -91,22 +104,36 @@ struct CSVRoutineImporter {
     /// The example/template CSV the app can import successfully. One row per
     /// group so users can see exactly which columns each group uses.
     static let exampleCSV = """
-    routine,group,exercise,machine,machine_settings,sets,reps,weight,duration_min,intensity,hold_seconds,sides,rounds,notes,recurrence,interval,weekday,month_day,count,start_date
-    YMCA Full Body A,strength,Leg Press,Leg Press,Seat height=5; Back angle=3,3,10,120,,,,,,Push through heels,weekly,1,Mon,,,
-    YMCA Full Body A,strength,Chest Press,Chest Press,Seat height=6,3,10,60,,,,,,,,,,,,
-    YMCA Full Body A,cardio,Treadmill,,,,,,20,moderate,,,,Steady pace,,,,,,
-    YMCA Full Body A,stretching,Hamstring Stretch,,,,,,,,30,2,3,Keep back flat,,,,,,
-    YMCA Full Body B,strength,Seated Row,Seated Row,Chest pad=5; Seat height=6,3,10,70,,,,,,,weekly,1,Thu,,,
-    YMCA Full Body B,cardio,Stationary Bike,,,,,,15,low,,,,Cooldown spin,,,,,,
+    routine,group,exercise,machine,machine_settings,set1_reps,set1_weight,set2_reps,set2_weight,set3_reps,set3_weight,set4_reps,set4_weight,set5_reps,set5_weight,duration_min,intensity,hold_seconds,sides,rounds,set_cooldown,exercise_cooldown,notes
+    YMCA Full Body A,strength,Leg Press,Leg Press,Seat height=5; Back angle=3,12,100,10,120,10,120,8,140,6,160,,,,,,90,180,Pyramid up
+    YMCA Full Body A,strength,Chest Press,Chest Press,Seat height=6,10,60,10,60,10,60,,,,,,,,,,60,,
+    YMCA Full Body A,cardio,Treadmill,,,,,,,,,,,,,20,moderate,,,,,,Steady pace
+    YMCA Full Body A,stretching,Hamstring Stretch,,,,,,,,,,,,,,,30,2,3,,,Keep back flat
+    YMCA Full Body B,strength,Seated Row,Seated Row,Chest pad=5; Seat height=6,10,70,10,70,8,80,6,90,,,,,,,,75,120,
+    YMCA Full Body B,cardio,Stationary Bike,,,,,,,,,,,,,15,low,,,,,,Cooldown spin
     """
 
     /// Validate the picked file is a CSV, then import its text.
     func importFile(at url: URL) throws -> CSVImportReport {
         guard url.pathExtension.lowercased() == "csv" else { throw CSVImportError.notCSV }
-        guard let data = try? Data(contentsOf: url),
-              let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1)
+        let data = Self.readFileData(at: url)
+        guard !data.isEmpty else { throw CSVImportError.unreadable } // 0 bytes ≠ "empty CSV"
+        guard let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1)
         else { throw CSVImportError.unreadable }
         return try importText(text)
+    }
+
+    /// Read a picked file's bytes, coordinating the read so an iCloud/provider
+    /// file that hasn't downloaded yet is materialized first (a plain
+    /// `Data(contentsOf:)` can otherwise return 0 bytes for such files).
+    static func readFileData(at url: URL) -> Data {
+        var coordError: NSError?
+        var result = Data()
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [.withoutChanges], error: &coordError) { u in
+            if let d = try? Data(contentsOf: u) { result = d }
+        }
+        if result.isEmpty, let d = try? Data(contentsOf: url) { result = d } // fallback
+        return result
     }
 
     // MARK: - A fully validated row, ready to insert.
@@ -118,10 +145,10 @@ struct CSVRoutineImporter {
         var machine: String
         var settings: [(label: String, numeric: Int?, other: String?)]
         var notes: String
-        // strength
-        var sets: Int = 0
-        var reps: Int = 0
-        var weight: Double = 0
+        /// Per-exercise cooldown between sets (seconds). Nil = routine default.
+        var setCooldown: Int? = nil
+        // strength — each entry is one planned set (its own reps + weight)
+        var plannedSets: [(reps: Int, weight: Double)] = []
         // cardio
         var durationMin: Int = 0
         var intensity: CardioIntensity = .moderate
@@ -129,25 +156,6 @@ struct CSVRoutineImporter {
         var holdSeconds: Int = 0
         var sidesCount: Int = 1
         var rounds: Int = 1
-    }
-
-    /// A validated, routine-level schedule parsed from the optional columns.
-    private struct ParsedSchedule: Equatable {
-        var freq: RecurrenceFrequency
-        var interval: Int
-        var weekdays: [Int]
-        var monthDay: Int?
-        var count: Int?
-        var startDate: Date
-
-        /// Equality ignores time-of-day on the anchor (we compare whole days).
-        static func == (a: ParsedSchedule, b: ParsedSchedule) -> Bool {
-            let cal = Calendar.current
-            return a.freq == b.freq && a.interval == b.interval
-                && a.weekdays.sorted() == b.weekdays.sorted()
-                && a.monthDay == b.monthDay && a.count == b.count
-                && cal.isDate(a.startDate, inSameDayAs: b.startDate)
-        }
     }
 
     /// Parse and import CSV text. All-or-nothing.
@@ -172,10 +180,16 @@ struct CSVRoutineImporter {
             return row[i].trimmingCharacters(in: .whitespaces)
         }
 
+        // How many setK_reps/setK_weight column pairs the header defines (strength).
+        var maxSet = 0
+        var sn = 1
+        while index["set\(sn)_reps"] != nil || index["set\(sn)_weight"] != nil { maxSet = sn; sn += 1 }
+
         // ---- PASS 1: validate EVERYTHING. No inserts happen here. ----
         var errors: [String] = []
         var parsedRows: [ParsedRow] = []
-        var scheduleByRoutine: [String: ParsedSchedule] = [:]
+        // Routine-level "between exercises" cooldown (one value per routine).
+        var exerciseCooldownByRoutine: [String: Int] = [:]
 
         for (offset, row) in dataRows.enumerated() {
             let lineNo = offset + 2 // header is line 1
@@ -209,45 +223,63 @@ struct CSVRoutineImporter {
 
             switch group {
             case .strength:
-                let setsStr = field(row, "sets"), repsStr = field(row, "reps"), weightStr = field(row, "weight")
-                if let v = Int(setsStr), v > 0 { parsed.sets = v }
-                else { rowErrors.append("Line \(lineNo): strength needs 'sets' as a positive whole number (got \"\(setsStr)\").") }
-                if let v = Int(repsStr), v > 0 { parsed.reps = v }
-                else { rowErrors.append("Line \(lineNo): strength needs 'reps' as a positive whole number (got \"\(repsStr)\").") }
-                if let v = Double(weightStr), v >= 0 { parsed.weight = v }
-                else { rowErrors.append("Line \(lineNo): strength needs 'weight' as a number ≥ 0 (got \"\(weightStr)\").") }
+                // Per-set columns are OPTIONAL here: if a row leaves them blank,
+                // the exercise's own default sets (from the library) are used.
+                for i in 1...max(1, maxSet) {
+                    let rs = field(row, "set\(i)_reps"), ws = field(row, "set\(i)_weight")
+                    if rs.isEmpty && ws.isEmpty { continue }
+                    if let r = Int(rs), r > 0, let w = Double(ws), w >= 0 {
+                        parsed.plannedSets.append((reps: r, weight: w))
+                    } else {
+                        rowErrors.append("Line \(lineNo): set \(i) needs whole reps > 0 and weight ≥ 0 (got reps \"\(rs)\", weight \"\(ws)\").")
+                    }
+                }
 
             case .cardio:
+                // Optional here; blank → the exercise's own duration/intensity.
                 let durStr = field(row, "duration_min"), intStr = field(row, "intensity")
-                if let v = Int(durStr), v > 0 { parsed.durationMin = v }
-                else { rowErrors.append("Line \(lineNo): cardio needs 'duration_min' as a positive whole number (got \"\(durStr)\").") }
-                if let i = CardioIntensity(rawValue: intStr.lowercased()) { parsed.intensity = i }
-                else { rowErrors.append("Line \(lineNo): cardio needs 'intensity' to be low, moderate, or high (got \"\(intStr)\").") }
+                if !durStr.isEmpty {
+                    if let v = Int(durStr), v > 0 { parsed.durationMin = v }
+                    else { rowErrors.append("Line \(lineNo): 'duration_min' must be a positive whole number (got \"\(durStr)\").") }
+                }
+                if !intStr.isEmpty {
+                    if let i = CardioIntensity(rawValue: intStr.lowercased()) { parsed.intensity = i }
+                    else { rowErrors.append("Line \(lineNo): 'intensity' must be low, moderate, or high (got \"\(intStr)\").") }
+                }
 
             case .stretching:
+                // Only the exercise name is required; blank hold/sides/rounds use defaults.
                 let holdStr = field(row, "hold_seconds"), sidesStr = field(row, "sides"), roundsStr = field(row, "rounds")
-                if let v = Int(holdStr), v > 0 { parsed.holdSeconds = v }
-                else { rowErrors.append("Line \(lineNo): stretching needs 'hold_seconds' as a positive whole number (got \"\(holdStr)\").") }
-                if let v = Int(sidesStr), v == 1 || v == 2 { parsed.sidesCount = v }
-                else { rowErrors.append("Line \(lineNo): stretching needs 'sides' to be 1 or 2 (got \"\(sidesStr)\").") }
-                if let v = Int(roundsStr), v > 0 { parsed.rounds = v }
-                else { rowErrors.append("Line \(lineNo): stretching needs 'rounds' as a positive whole number (got \"\(roundsStr)\").") }
+                if !holdStr.isEmpty {
+                    if let v = Int(holdStr), v >= 0 { parsed.holdSeconds = v }
+                    else { rowErrors.append("Line \(lineNo): 'hold_seconds' must be a whole number ≥ 0 (got \"\(holdStr)\").") }
+                }
+                if !sidesStr.isEmpty {
+                    if let v = Int(sidesStr), v == 1 || v == 2 { parsed.sidesCount = v }
+                    else { rowErrors.append("Line \(lineNo): 'sides' must be 1 or 2 (got \"\(sidesStr)\").") }
+                }
+                if !roundsStr.isEmpty {
+                    if let v = Int(roundsStr), v > 0 { parsed.rounds = v }
+                    else { rowErrors.append("Line \(lineNo): 'rounds' must be a positive whole number (got \"\(roundsStr)\").") }
+                }
             }
 
-            // Optional routine-level schedule. Parsed/validated here; checked for
-            // consistency across all rows of the same routine.
-            if let sched = Self.parseSchedule(recurrence: field(row, "recurrence"),
-                                              interval: field(row, "interval"),
-                                              weekday: field(row, "weekday"),
-                                              monthDay: field(row, "month_day"),
-                                              count: field(row, "count"),
-                                              startDate: field(row, "start_date"),
-                                              lineNo: lineNo, into: &rowErrors),
-               !routineName.isEmpty {
-                if let existing = scheduleByRoutine[routineName], existing != sched {
-                    rowErrors.append("Line \(lineNo): a different schedule was already given for \"\(routineName)\" — use one schedule per routine.")
+            // Per-exercise cooldown between sets (optional, seconds ≥ 0).
+            let setCdStr = field(row, "set_cooldown")
+            if !setCdStr.isEmpty {
+                if let v = Int(setCdStr), v >= 0 { parsed.setCooldown = v }
+                else { rowErrors.append("Line \(lineNo): 'set_cooldown' must be a whole number of seconds ≥ 0 (got \"\(setCdStr)\").") }
+            }
+
+            // Routine-level cooldown between exercises (optional). It's one value
+            // per routine, but rows may differ (e.g. 0 on warmups, 60 on strength),
+            // so we keep the LARGEST value given rather than treating that as an error.
+            let exCdStr = field(row, "exercise_cooldown")
+            if !exCdStr.isEmpty, !routineName.isEmpty {
+                if let v = Int(exCdStr), v >= 0 {
+                    exerciseCooldownByRoutine[routineName] = max(exerciseCooldownByRoutine[routineName] ?? 0, v)
                 } else {
-                    scheduleByRoutine[routineName] = sched
+                    rowErrors.append("Line \(lineNo): 'exercise_cooldown' must be a whole number of seconds ≥ 0 (got \"\(exCdStr)\").")
                 }
             }
 
@@ -262,6 +294,8 @@ struct CSVRoutineImporter {
         guard errors.isEmpty else { throw CSVImportError.invalidData(errors) }
 
         // ---- PASS 2: create records (now guaranteed valid). ----
+        // Additive-only: routines that already exist (by name) are ignored, and
+        // exercises that already exist (by name + group) are reused, not duplicated.
         let repo = RoutineRepository(context)
         var report = CSVImportReport()
         var routineByName: [String: Routine] = [:]
@@ -269,7 +303,24 @@ struct CSVRoutineImporter {
         var exerciseByKey: [String: Exercise] = [:]        // key: name|group
         var machineByName: [String: Machine] = [:]
 
+        // Existing data to skip/reuse.
+        let existingRoutineNames = Set((try? context.fetch(
+            FetchDescriptor<Routine>(predicate: #Predicate { $0.deletedAt == nil })
+        ))?.map(\.name) ?? [])
+        var skippedRoutineNames = Set<String>()
+        for e in (try? context.fetch(
+            FetchDescriptor<Exercise>(predicate: #Predicate { $0.deletedAt == nil })
+        )) ?? [] {
+            exerciseByKey["\(e.name)|\(e.defaultSectionType.rawValue)"] = e
+        }
+
         for parsed in parsedRows {
+            // Skip rows belonging to a routine that already exists.
+            if existingRoutineNames.contains(parsed.routine) {
+                if skippedRoutineNames.insert(parsed.routine).inserted { report.routinesSkipped += 1 }
+                continue
+            }
+
             // Routine (grouped by name).
             let routine: Routine
             if let existing = routineByName[parsed.routine] {
@@ -278,6 +329,10 @@ struct CSVRoutineImporter {
                 routine = repo.createRoutine(name: parsed.routine, source: .user)
                 routineByName[parsed.routine] = routine
                 report.routinesCreated += 1
+                // Routine-level "between exercises" cooldown.
+                if let exCd = exerciseCooldownByRoutine[parsed.routine] {
+                    routine.activeVersion?.defaultRestBetweenExercises = exCd
+                }
             }
             guard let version = routine.activeVersion else { continue }
 
@@ -288,47 +343,50 @@ struct CSVRoutineImporter {
                 section = cached
             } else {
                 section = repo.addSection(to: version, type: parsed.group,
-                                          durationMinutes: parsed.group == .cardio ? parsed.durationMin : nil)
+                                          durationMinutes: (parsed.group == .cardio && parsed.durationMin > 0) ? parsed.durationMin : nil)
                 sectionCache[sectionKey] = section
             }
 
-            // Machine (optional; stretching has no machine). Shared by name.
-            var machineId: UUID?
-            if parsed.group != .stretching, !parsed.machine.isEmpty {
-                if let m = machineByName[parsed.machine] {
-                    machineId = m.id
-                } else {
-                    let m = Machine(name: parsed.machine, source: .user)
-                    context.insert(m)
-                    for (i, s) in parsed.settings.prefix(4).enumerated() {
-                        let def = MachineSettingDefinition(label: s.label, order: i,
-                                                           numericValue: s.numeric,
-                                                           otherText: s.other, source: .user)
-                        def.machine = m
-                        m.settingDefinitions.append(def)
-                        context.insert(def)
-                    }
-                    machineByName[parsed.machine] = m
-                    machineId = m.id
-                }
-            }
-
-            // Exercise definition, shared by (name, group). On first creation we
-            // set its group + group-specific defaults from the CSV.
+            // Exercise definition, shared by (name, group). Reuse an existing one
+            // (from the library or earlier in this import); only create when new —
+            // and only then create its machine, so existing data isn't duplicated.
             let exKey = "\(parsed.exercise)|\(parsed.group.rawValue)"
             let exercise: Exercise
             if let e = exerciseByKey[exKey] {
                 exercise = e
             } else {
+                // Machine (optional; stretching has no machine). Shared by name.
+                var machineId: UUID?
+                if parsed.group != .stretching, !parsed.machine.isEmpty {
+                    if let m = machineByName[parsed.machine] {
+                        machineId = m.id
+                    } else {
+                        let m = Machine(name: parsed.machine, source: .user)
+                        context.insert(m)
+                        for (i, s) in parsed.settings.prefix(4).enumerated() {
+                            let def = MachineSettingDefinition(label: s.label, order: i,
+                                                               numericValue: s.numeric,
+                                                               otherText: s.other, source: .user)
+                            def.machine = m
+                            m.settingDefinitions.append(def)
+                            context.insert(def)
+                        }
+                        machineByName[parsed.machine] = m
+                        machineId = m.id
+                    }
+                }
+
                 let e = Exercise(name: parsed.exercise, machineId: machineId,
                                  notes: parsed.notes, source: .user)
                 e.defaultSectionType = parsed.group
                 switch parsed.group {
                 case .strength:
-                    let set = ExerciseDefaultSet(order: 0, reps: parsed.reps, weight: parsed.weight)
-                    set.exercise = e
-                    e.defaultSets.append(set)
-                    context.insert(set)
+                    for (i, s) in parsed.plannedSets.enumerated() {
+                        let set = ExerciseDefaultSet(order: i, reps: s.reps, weight: s.weight)
+                        set.exercise = e
+                        e.defaultSets.append(set)
+                        context.insert(set)
+                    }
                 case .cardio:
                     e.durationMinutes = parsed.durationMin
                     e.intensity = parsed.intensity
@@ -345,34 +403,30 @@ struct CSVRoutineImporter {
             // Add to the routine section. Strength carries per-set planned rows;
             // cardio/stretching are time-based (no planned sets) — their
             // prescription lives on the exercise definition.
+            let restBetweenSets = parsed.setCooldown ?? version.defaultRestBetweenSets
             switch parsed.group {
             case .strength:
-                let plannedSets = Array(repeating: (reps: parsed.reps, weight: parsed.weight), count: parsed.sets)
+                // Blank set columns → use the exercise's own default sets; if it
+                // has none either, fall back to a single starter set.
+                let planned: [(reps: Int, weight: Double)]
+                if !parsed.plannedSets.isEmpty {
+                    planned = parsed.plannedSets
+                } else if !exercise.effectiveDefaultSets.isEmpty {
+                    planned = exercise.effectiveDefaultSets
+                } else {
+                    planned = [(reps: 10, weight: 0)]
+                }
                 repo.addExercise(to: section, exercise: exercise,
-                                 plannedSets: plannedSets,
-                                 restBetweenSets: version.defaultRestBetweenSets,
+                                 plannedSets: planned,
+                                 restBetweenSets: restBetweenSets,
                                  notes: parsed.notes)
             case .cardio, .stretching:
                 repo.addExercise(to: section, exercise: exercise,
                                  plannedSets: [],
-                                 restBetweenSets: version.defaultRestBetweenSets,
+                                 restBetweenSets: restBetweenSets,
                                  notes: parsed.notes)
             }
             report.exercisesAdded += 1
-        }
-
-        // Create routine-level schedules (validated in PASS 1).
-        for (routineName, sched) in scheduleByRoutine {
-            guard let routine = routineByName[routineName] else { continue }
-            let rule = ScheduleRule(routineId: routine.id,
-                                    freq: sched.freq,
-                                    interval: sched.interval,
-                                    weekdays: sched.weekdays,
-                                    startDate: sched.startDate,
-                                    count: sched.count,
-                                    byMonthDay: sched.monthDay,
-                                    source: .user)
-            context.insert(rule)
         }
 
         Audit.log(context, type: "import.csv", entity: "Routine",
@@ -397,91 +451,6 @@ struct CSVRoutineImporter {
         case "stretch", "stretching": return .stretching
         default: return nil
         }
-    }
-
-    /// yyyy-MM-dd parser for the optional start_date column.
-    private static let scheduleDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.calendar = Calendar(identifier: .gregorian)
-        f.timeZone = .current
-        return f
-    }()
-
-    /// Map a weekday name/abbreviation to a Calendar weekday int (1=Sun…7=Sat).
-    private static func weekday(from raw: String) -> Int? {
-        switch raw.lowercased() {
-        case "sun", "sunday", "su": return 1
-        case "mon", "monday", "mo": return 2
-        case "tue", "tues", "tuesday", "tu": return 3
-        case "wed", "weds", "wednesday", "we": return 4
-        case "thu", "thur", "thurs", "thursday", "th": return 5
-        case "fri", "friday", "fr": return 6
-        case "sat", "saturday", "sa": return 7
-        default: return nil
-        }
-    }
-
-    /// Parse the optional schedule columns. Returns nil when no `recurrence` is
-    /// given (no schedule). Any validation problems are appended to `errors` and
-    /// nil is returned so the row fails the all-or-nothing check.
-    private static func parseSchedule(recurrence: String, interval: String, weekday weekdayStr: String,
-                                      monthDay: String, count: String, startDate: String,
-                                      lineNo: Int, into errors: inout [String]) -> ParsedSchedule? {
-        guard !recurrence.isEmpty else { return nil }
-        let before = errors.count
-
-        let freq: RecurrenceFrequency
-        switch recurrence.lowercased() {
-        case "daily": freq = .daily
-        case "weekly": freq = .weekly
-        case "monthly": freq = .monthly
-        default:
-            errors.append("Line \(lineNo): 'recurrence' must be daily, weekly, or monthly (got \"\(recurrence)\").")
-            return nil
-        }
-
-        var intervalVal = 1
-        if !interval.isEmpty {
-            if let v = Int(interval), v > 0 { intervalVal = v }
-            else { errors.append("Line \(lineNo): 'interval' must be a positive whole number (got \"\(interval)\").") }
-        }
-
-        var weekdays: [Int] = []
-        if freq == .weekly {
-            let tokens = weekdayStr.split(whereSeparator: { " |/,".contains($0) }).map(String.init)
-            if tokens.isEmpty {
-                errors.append("Line \(lineNo): weekly schedules need at least one 'weekday' (e.g. Mon).")
-            } else {
-                for t in tokens {
-                    if let d = Self.weekday(from: t) { weekdays.append(d) }
-                    else { errors.append("Line \(lineNo): unrecognized weekday \"\(t)\".") }
-                }
-            }
-        }
-        // 'weekday' is ignored for daily/monthly (no error).
-
-        var monthDayVal: Int?
-        if freq == .monthly, !monthDay.isEmpty {
-            if let v = Int(monthDay), (1...31).contains(v) { monthDayVal = v }
-            else { errors.append("Line \(lineNo): 'month_day' must be 1...31 (got \"\(monthDay)\").") }
-        }
-
-        var countVal: Int?
-        if !count.isEmpty {
-            if let v = Int(count), v > 0 { countVal = v }
-            else { errors.append("Line \(lineNo): 'count' must be a positive whole number (got \"\(count)\").") }
-        }
-
-        var start = Date()
-        if !startDate.isEmpty {
-            if let d = scheduleDateFormatter.date(from: startDate) { start = d }
-            else { errors.append("Line \(lineNo): 'start_date' must be in yyyy-MM-dd format (got \"\(startDate)\").") }
-        }
-
-        guard errors.count == before else { return nil }
-        return ParsedSchedule(freq: freq, interval: intervalVal, weekdays: weekdays,
-                              monthDay: monthDayVal, count: countVal, startDate: start)
     }
 
     /// Parse "Label=Value; Label2=Value2" into up to 4 setting tuples. A numeric
@@ -521,25 +490,28 @@ struct CSVRoutineImporter {
         var field = ""
         var row: [String] = []
         var inQuotes = false
-        let scalars = Array(text)
+        // Iterate Unicode SCALARS, not Characters: Swift collapses "\r\n" into a
+        // single Character grapheme cluster, which would hide CRLF line breaks
+        // (the format Google Sheets / Excel export). Scalars keep \r and \n
+        // separate, so CRLF, LF, and lone-CR files all split into rows correctly.
+        let scalars = Array(text.unicodeScalars)
         var i = 0
         while i < scalars.count {
             let c = scalars[i]
             if inQuotes {
                 if c == "\"" {
-                    if i + 1 < scalars.count && scalars[i + 1] == "\"" { field.append("\""); i += 1 }
+                    if i + 1 < scalars.count && scalars[i + 1] == "\"" { field.unicodeScalars.append("\""); i += 1 }
                     else { inQuotes = false }
-                } else { field.append(c) }
+                } else { field.unicodeScalars.append(c) }
             } else {
                 switch c {
                 case "\"": inQuotes = true
                 case ",": row.append(field); field = ""
-                case "\r":
-                    break // ignore; handled by \n
-                case "\n":
+                case "\r", "\n":
                     row.append(field); field = ""
                     rows.append(row); row = []
-                default: field.append(c)
+                    if c == "\r", i + 1 < scalars.count, scalars[i + 1] == "\n" { i += 1 } // CRLF: skip the LF
+                default: field.unicodeScalars.append(c)
                 }
             }
             i += 1

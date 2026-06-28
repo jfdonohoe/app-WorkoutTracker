@@ -52,10 +52,15 @@ struct WorkoutRepository {
             session.restBetweenExercises = version.defaultRestBetweenExercises
             session.restBetweenSets = version.defaultRestBetweenSets
 
+            // Each routine section becomes its own group instance, so a routine
+            // with two strength sections keeps two strength groups in the workout.
             var orderCounter = 0
+            var groupCounters: [SectionType: Int] = [:]
             for section in version.orderedSections {
+                let groupIndex = groupCounters[section.type, default: 0]
+                groupCounters[section.type] = groupIndex + 1
                 for re in section.orderedExercises {
-                    let se = snapshotExercise(re, sectionType: section.type, order: orderCounter)
+                    let se = snapshotExercise(re, sectionType: section.type, order: orderCounter, groupIndex: groupIndex)
                     se.session = session
                     session.exercises.append(se)
                     orderCounter += 1
@@ -74,7 +79,8 @@ struct WorkoutRepository {
     /// frozen copy of its machine's current settings.
     private func snapshotExercise(_ re: RoutineExercise,
                                   sectionType: SectionType,
-                                  order: Int) -> WorkoutSessionExercise {
+                                  order: Int,
+                                  groupIndex: Int = 0) -> WorkoutSessionExercise {
         let se = WorkoutSessionExercise(sourceRoutineExerciseId: re.id,
                                         exerciseId: re.exerciseId,
                                         machineId: re.machineId,
@@ -83,7 +89,24 @@ struct WorkoutRepository {
                                         order: order,
                                         plannedRestBetweenSets: re.restBetweenSets,
                                         notes: re.notes)
+        se.groupIndex = groupIndex
         context.insert(se)
+
+        // Snapshot the group-specific prescription from the exercise definition
+        // (cardio: duration/intensity; stretching: hold/sides/rounds).
+        if let def = fetchExercise(re.exerciseId) {
+            switch sectionType {
+            case .cardio:
+                se.durationMinutes = def.durationMinutes
+                se.intensity = def.intensity
+            case .stretching:
+                se.holdSeconds = def.holdSeconds
+                se.sides = def.sides
+                se.rounds = def.rounds
+            case .strength:
+                break
+            }
+        }
 
         // Snapshot planned sets — per-set values when defined, else synthesized.
         for (i, planned) in re.effectivePlannedSets.enumerated() {
@@ -114,6 +137,28 @@ struct WorkoutRepository {
     func fetchMachine(_ id: UUID) -> Machine? {
         let d = FetchDescriptor<Machine>(predicate: #Predicate { $0.id == id })
         return try? context.fetch(d).first
+    }
+
+    func fetchExercise(_ id: UUID) -> Exercise? {
+        let d = FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == id })
+        return try? context.fetch(d).first
+    }
+
+    // MARK: - Non-set completion (cardio / stretching)
+
+    /// Mark a cardio/stretching exercise complete (it has no sets to tick off).
+    func markExerciseComplete(_ exercise: WorkoutSessionExercise, in session: WorkoutSession, now: Date = .now) {
+        guard !session.isLocked else { return }
+        exercise.markedCompleteAt = now
+        session.updatedAt = now
+        recomputeStatus(session)
+    }
+
+    func unmarkExerciseComplete(_ exercise: WorkoutSessionExercise, in session: WorkoutSession) {
+        guard !session.isLocked else { return }
+        exercise.markedCompleteAt = nil
+        session.updatedAt = .now
+        recomputeStatus(session)
     }
 
     // MARK: - Set completion (active session only)
@@ -166,13 +211,20 @@ struct WorkoutRepository {
 
     // MARK: - Status
 
-    /// Recompute status from the set/exercise completion rules.
+    /// Recompute status. Counts "units": each strength set, plus each cardio /
+    /// stretching exercise (which has no sets) as a single mark-complete unit.
     func recomputeStatus(_ session: WorkoutSession) {
         guard !session.isLocked else { return }
-        let allSets = session.exercises.flatMap(\.sets)
-        let total = allSets.count
-        let done = allSets.filter(\.isCompleted).count
-
+        var total = 0, done = 0
+        for ex in session.exercises {
+            if ex.hasSets {
+                total += ex.sets.count
+                done += ex.sets.filter(\.isCompleted).count
+            } else {
+                total += 1
+                if ex.markedCompleteAt != nil { done += 1 }
+            }
+        }
         if total > 0 && done == total {
             session.status = .completed
         } else if done > 0 {
@@ -188,6 +240,7 @@ struct WorkoutRepository {
     func finishWorkout(_ session: WorkoutSession, now: Date = .now) {
         recomputeStatus(session)
         let anyDone = session.exercises.flatMap(\.sets).contains(where: \.isCompleted)
+            || session.exercises.contains { !$0.hasSets && $0.markedCompleteAt != nil }
         if !anyDone {
             session.status = .abandoned
         }
@@ -263,6 +316,93 @@ struct WorkoutRepository {
         }
         session.updatedAt = .now
         return se
+    }
+
+    /// Add a library exercise to the active session mid-workout, snapshotting its
+    /// group-specific prescription (strength sets / cardio duration+intensity /
+    /// stretching hold+sides+rounds) and any machine settings. Works for every
+    /// exercise type, so cardio and stretching exercises are added correctly
+    /// (no spurious sets).
+    @discardableResult
+    func addUnplannedExercise(to session: WorkoutSession, from exercise: Exercise,
+                              groupIndex: Int = 0) -> WorkoutSessionExercise? {
+        guard !session.isLocked else { assertionFailure("Locked session."); return nil }
+        let group = exercise.defaultSectionType
+        let order = (session.exercises.map(\.order).max() ?? -1) + 1
+        let se = WorkoutSessionExercise(exerciseId: exercise.id,
+                                        machineId: exercise.machineId,
+                                        name: exercise.name,
+                                        sectionType: group,
+                                        order: order,
+                                        plannedRestBetweenSets: exercise.defaultRest,
+                                        notes: exercise.notes,
+                                        isAddedDuringWorkout: true)
+        se.groupIndex = groupIndex
+        se.session = session
+        session.exercises.append(se)
+        context.insert(se)
+
+        switch group {
+        case .strength:
+            let planned = exercise.effectiveDefaultSets.isEmpty
+                ? [(reps: 10, weight: 0.0)] : exercise.effectiveDefaultSets
+            for (i, p) in planned.enumerated() {
+                let set = WorkoutSessionSet(index: i, plannedWeight: p.weight, plannedReps: p.reps)
+                set.exercise = se
+                se.sets.append(set)
+                context.insert(set)
+            }
+        case .cardio:
+            se.durationMinutes = exercise.durationMinutes
+            se.intensity = exercise.intensity
+        case .stretching:
+            se.holdSeconds = exercise.holdSeconds
+            se.sides = exercise.sides
+            se.rounds = exercise.rounds
+        }
+
+        // Snapshot the machine's current settings (shared on the machine, frozen here).
+        if let machineId = exercise.machineId, let machine = fetchMachine(machineId) {
+            for def in machine.activeSettings {
+                let snap = SessionMachineSetting(definitionId: def.id, label: def.label, order: def.order,
+                                                 numericValue: def.numericValue, otherText: def.otherText)
+                snap.exercise = se
+                se.machineSettings.append(snap)
+                context.insert(snap)
+            }
+        }
+        session.updatedAt = .now
+        return se
+    }
+
+    /// Edit a strength exercise's planned sets on an active session (mirrors the
+    /// routine editor's set builder). Existing sets are updated in place by index
+    /// so completion/actuals are preserved where they still apply; extra sets are
+    /// added or trimmed to match the new plan.
+    func setSessionPlannedSets(_ exercise: WorkoutSessionExercise,
+                               sets: [(reps: Int, weight: Double)],
+                               restBetweenSets: Int? = nil,
+                               in session: WorkoutSession) {
+        guard !session.isLocked else { return }
+        let plan = sets.isEmpty ? [(reps: 10, weight: 0.0)] : sets
+        let ordered = exercise.orderedSets
+        for (i, p) in plan.enumerated() {
+            if i < ordered.count {
+                ordered[i].plannedReps = p.reps
+                ordered[i].plannedWeight = p.weight
+            } else {
+                let set = WorkoutSessionSet(index: i, plannedWeight: p.weight, plannedReps: p.reps)
+                set.exercise = exercise
+                exercise.sets.append(set)
+                context.insert(set)
+            }
+        }
+        if plan.count < ordered.count {
+            for set in ordered[plan.count...] { context.delete(set) }
+        }
+        if let restBetweenSets { exercise.plannedRestBetweenSets = restBetweenSets }
+        session.updatedAt = .now
+        recomputeStatus(session)
     }
 
     /// Reorder exercises in the active session.

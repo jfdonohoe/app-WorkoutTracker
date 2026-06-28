@@ -20,6 +20,7 @@ struct ActiveWorkoutView: View {
     var onFinished: (WorkoutSession) -> Void = { _ in }
 
     @State private var showStopConfirm = false
+    @State private var showEditor = false
 
     var body: some View {
         NavigationStack {
@@ -34,6 +35,12 @@ struct ActiveWorkoutView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close") { showStopConfirm = true }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Edit") { showEditor = true }
+                }
+            }
+            .sheet(isPresented: $showEditor) {
+                SessionEditorView(session: session)
             }
             .confirmationDialog("Stop your workout?", isPresented: $showStopConfirm, titleVisibility: .visible) {
                 Button("Yes, stop", role: .destructive) {

@@ -117,7 +117,9 @@ final class RestTimerService: ObservableObject {
             isFinished = true
             ticker?.cancel()
             fireCompletionFeedback()
-        } else {
+        } else if remaining != remainingSeconds {
+            // Only publish when the whole-second value actually changes, so views
+            // observing the timer don't re-render 4×/sec for no visible change.
             remainingSeconds = remaining
         }
     }
@@ -142,4 +144,9 @@ final class RestTimerService: ObservableObject {
         guard totalSeconds > 0 else { return 0 }
         return 1.0 - (Double(remainingSeconds) / Double(totalSeconds))
     }
+
+    /// Absolute end instant of the running countdown (nil when stopped/reset).
+    /// Lets the UI drive one smooth reveal over the whole remaining time instead
+    /// of re-animating every second.
+    var endInstant: Date? { endDate }
 }

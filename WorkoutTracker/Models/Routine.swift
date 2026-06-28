@@ -72,7 +72,7 @@ final class RoutineVersion {
     var versionNumber: Int
     var isActive: Bool
     /// Default rest between exercises (seconds) for this routine version.
-    /// Defaults to 3 minutes.
+    /// Defaults to 1 minute.
     var defaultRestBetweenExercises: Int
     /// Default rest between sets (seconds). Set cooldown is a ROUTINE-level
     /// setting, not part of an exercise's definition. Defaults to 1 minute.
@@ -97,7 +97,7 @@ final class RoutineVersion {
          routineId: UUID,
          versionNumber: Int,
          isActive: Bool = true,
-         defaultRestBetweenExercises: Int = 180,
+         defaultRestBetweenExercises: Int = 60,
          defaultRestBetweenSets: Int = 60,
          note: String = "",
          source: DataSource = .user,
@@ -189,7 +189,7 @@ final class RoutineExercise {
          setCount: Int = 3,
          plannedWeight: Double = 0,
          plannedReps: Int = 10,
-         restBetweenSets: Int = 90,
+         restBetweenSets: Int = 60,
          notes: String = "",
          targetEffort: PerceivedEffort? = nil) {
         self.id = id

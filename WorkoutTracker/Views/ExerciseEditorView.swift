@@ -5,7 +5,7 @@
 //  Create/edit a library Exercise: name, group, the group's default
 //  prescription (strength = per-set reps/weight, cardio = duration/intensity,
 //  stretching = hold/sides/rounds), an optional machine + up to 4 shared
-//  settings, a reference photo (strength/cardio), and notes.
+//  settings, a reference photo (any group), and notes.
 //
 //  WHY this is presented as a SHEET (see ExerciseLibraryView):
 //  A `ForEach` over a @State value array (the per-set list, the settings list)
@@ -44,8 +44,8 @@ struct ExerciseEditorView: View {
     @State private var rounds = 1
     // Photo
     @State private var photoData: Data?
-    @State private var showLibrary = false
-    @State private var showCamera = false
+    private enum PhotoSource: Int, Identifiable { case library, camera; var id: Int { rawValue } }
+    @State private var photoSource: PhotoSource?
     @State private var showDeleteConfirm = false
     @State private var didLoad = false
 
@@ -55,8 +55,6 @@ struct ExerciseEditorView: View {
     }
 
     private var isNew: Bool { existing == nil }
-    /// Stretching has no machine and no photo.
-    private var allowsPhoto: Bool { group != .stretching }
 
     struct SetDraft: Identifiable, Equatable { let id = UUID(); var reps: Int; var weight: Double }
     struct SettingDraft: Identifiable, Equatable {
@@ -87,7 +85,7 @@ struct ExerciseEditorView: View {
 
             groupSections
 
-            if allowsPhoto { photoSection }
+            photoSection   // every group can have a reference photo
 
             Section("Notes") {
                 TextField("Notes", text: $notes, axis: .vertical)
@@ -114,12 +112,16 @@ struct ExerciseEditorView: View {
             }
         }
         .onAppear(perform: load)
-        .sheet(isPresented: $showLibrary) {
-            PhotoLibraryPicker { data in photoData = data }
-        }
-        .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker { image in photoData = image.jpegData(compressionQuality: 0.8) }
-                .ignoresSafeArea()
+        // ONE presentation for both sources — a separate .sheet and .fullScreenCover
+        // on the same view conflict (wrong one fires / flashes shut on first use).
+        .fullScreenCover(item: $photoSource) { source in
+            switch source {
+            case .library:
+                PhotoLibraryPicker { data in photoData = data }
+            case .camera:
+                CameraPicker { image in photoData = image.jpegData(compressionQuality: 0.8) }
+                    .ignoresSafeArea()
+            }
         }
         .confirmationDialog("Delete this exercise?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Delete exercise", role: .destructive) {
@@ -157,6 +159,7 @@ struct ExerciseEditorView: View {
                     let last = sets.last ?? SetDraft(reps: 10, weight: 0)
                     sets.append(SetDraft(reps: last.reps, weight: last.weight))
                 } label: { Label("Add set (copies last)", systemImage: "plus.circle") }
+                .disabled(sets.count >= 15)
             }
             machineSection
         case .cardio:
@@ -221,21 +224,25 @@ struct ExerciseEditorView: View {
     @ViewBuilder
     private var photoSection: some View {
         Section("Photo") {
-            if let data = photoData, let uiImage = UIImage(data: data) {
-                Color.clear
+            if let data = photoData {
+                // Whole image (no crop); animates + loops if it's a GIF.
+                AnimatedImageView(data: data)
+                    .aspectRatio(AnimatedImageView.aspectRatio(of: data), contentMode: .fit)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 180)
-                    .overlay { Image(uiImage: uiImage).resizable().scaledToFill() }
-                    .clipped()
                     .listRowInsets(EdgeInsets())
             }
             HStack {
-                Button { showLibrary = true } label: {
+                // .borderless gives each button its own tap target — otherwise a
+                // tap on this List row fires BOTH buttons (Choose photo opened the
+                // camera because the camera action fired too).
+                Button { photoSource = .library } label: {
                     Label(photoData == nil ? "Choose photo" : "Replace photo", systemImage: "photo")
                 }
+                .buttonStyle(.borderless)
                 if CameraPicker.isAvailable {
                     Spacer()
-                    Button { showCamera = true } label: { Label("Camera", systemImage: "camera") }
+                    Button { photoSource = .camera } label: { Label("Camera", systemImage: "camera") }
+                        .buttonStyle(.borderless)
                 }
             }
             if photoData != nil {
@@ -287,7 +294,7 @@ struct ExerciseEditorView: View {
         exercise.name = trimmed
         exercise.notes = notes
         exercise.defaultSectionType = group
-        exercise.photoData = allowsPhoto ? photoData : nil
+        exercise.photoData = photoData
         exercise.durationMinutes = durationMinutes
         exercise.intensity = intensity
         exercise.holdSeconds = holdSeconds

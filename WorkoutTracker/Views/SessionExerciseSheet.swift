@@ -30,9 +30,12 @@ struct SessionExerciseSheet: View {
 
     @Bindable var session: WorkoutSession
     @Bindable var exercise: WorkoutSessionExercise
-    /// Called when the LAST set of this exercise is completed (so the workout UI
-    /// can start the between-exercises cooldown).
+    /// Called when this exercise is completed AND it was the last incomplete one
+    /// in its group (so the workout UI can start the between-exercises cooldown).
     var onExerciseCompleted: () -> Void = {}
+    /// Called when this exercise is completed but other exercises in its group
+    /// remain — the workout UI switches the sheet to the given next exercise.
+    var onAdvance: (WorkoutSessionExercise) -> Void = { _ in }
 
     @State private var editSettings = false
     @State private var expandedCompletedSetId: UUID?
@@ -42,6 +45,14 @@ struct SessionExerciseSheet: View {
     @State private var showAddSetting = false
     @State private var didEdit = false
     @State private var showUpdatePrompt = false
+    // Snapshot of the cardio/stretching values when the sheet opened, so an
+    // adjustment can be detected on Mark Complete (strength uses planned vs actual).
+    @State private var capturedOriginals = false
+    @State private var origDuration = 0
+    @State private var origIntensityRaw = ""
+    @State private var origHold = 0
+    @State private var origSides = 1
+    @State private var origRounds = 1
     @State private var definition: Exercise?
     @State private var photoItem: PhotosPickerItem?
     @State private var showCamera = false
@@ -58,12 +69,21 @@ struct SessionExerciseSheet: View {
         NavigationStack {
             ScrollViewReader { proxy in
                 List {
-                    Section("Sets") {
-                        ForEach(exercise.orderedSets) { set in
-                            setRow(set, proxy: proxy).id(set.id)
+                    // Group-specific prescription: strength = sets; cardio and
+                    // stretching = their own editable values + a Mark Complete button.
+                    switch exercise.sectionType {
+                    case .strength:
+                        Section("Sets") {
+                            ForEach(exercise.orderedSets) { set in
+                                setRow(set, proxy: proxy).id(set.id)
+                            }
                         }
+                    case .cardio:
+                        cardioSection
+                    case .stretching:
+                        stretchSection
                     }
-                    // Machine settings, then the photo/notes definition, below sets.
+                    // Machine settings (cardio/strength), then the photo/notes definition.
                     machineSettingsSection
                     definitionSection
                 }
@@ -107,14 +127,134 @@ struct SessionExerciseSheet: View {
                     try? context.save()
                 }
             }
-            .onAppear { syncDrafts(); loadDefinition() }
-            .confirmationDialog("Apply the new reps/weights to…",
+            .onAppear { syncDrafts(); loadDefinition(); captureOriginals() }
+            .confirmationDialog(promptTitle,
                                 isPresented: $showUpdatePrompt, titleVisibility: .visible) {
-                Button("This workout only") { finishExercise() }
-                Button("Save as future default") { applyEditsToRoutineAndExercise(); finishExercise() }
+                Button("This workout only") { finishAfterPrompt() }
+                Button("Save as future default") { applyFutureDefault(); finishAfterPrompt() }
             } message: {
-                Text("You changed reps or weight. Save them as the routine's future default, or keep them just for this workout?")
+                Text(promptMessage)
             }
+        }
+    }
+
+    // MARK: - Cardio / Stretching (no sets)
+
+    @ViewBuilder
+    private var cardioSection: some View {
+        Section("Cardio") {
+            if isLocked {
+                detailRow("Duration", "\(exercise.durationMinutes) min")
+                if let i = exercise.intensity { detailRow("Intensity", i.displayName) }
+            } else {
+                Stepper("Duration: \(exercise.durationMinutes) min",
+                        value: intBinding(\.durationMinutes), in: 0...600, step: 5)
+                Picker("Intensity", selection: intensityBinding) {
+                    Text("Low").tag(CardioIntensity.low)
+                    Text("Moderate").tag(CardioIntensity.moderate)
+                    Text("High").tag(CardioIntensity.high)
+                }
+            }
+            completeControl
+        }
+    }
+
+    @ViewBuilder
+    private var stretchSection: some View {
+        Section("Stretching") {
+            if isLocked {
+                detailRow("Hold", "\(exercise.holdSeconds)s")
+                detailRow("Sides", "\(exercise.sides)")
+                detailRow("Rounds", "\(exercise.rounds)")
+                if !exercise.notes.isEmpty { detailRow("Notes", exercise.notes) }
+            } else {
+                Stepper("Hold: \(exercise.holdSeconds)s", value: intBinding(\.holdSeconds), in: 0...600, step: 5)
+                Stepper("Sides: \(exercise.sides)", value: intBinding(\.sides), in: 1...2)
+                Stepper("Rounds: \(exercise.rounds)", value: intBinding(\.rounds), in: 1...20)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Notes").font(.caption).foregroundStyle(.secondary)
+                    TextField("Notes", text: exerciseNotesBinding, axis: .vertical)
+                }
+            }
+            completeControl
+        }
+    }
+
+    /// Mark Complete / Mark not done for non-set exercises (cardio / stretching).
+    @ViewBuilder
+    private var completeControl: some View {
+        if isLocked {
+            Label(exercise.isFullyCompleted ? "Completed" : "Not completed",
+                  systemImage: exercise.isFullyCompleted ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(exercise.isFullyCompleted ? .green : .secondary)
+        } else if exercise.isFullyCompleted {
+            HStack {
+                Label("Completed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                Spacer()
+                Button(role: .destructive) {
+                    repo.unmarkExerciseComplete(exercise, in: session); try? context.save()
+                } label: { Text("Mark not done") }
+                .buttonStyle(.borderless)
+            }
+        } else {
+            // Same presentation as the strength Complete Set button: a full-width
+            // button as its own row with the standard section gutters/spacing.
+            Button { markComplete() } label: {
+                SetActionButtonLabel(title: completeActionTitle, systemImage: "checkmark.circle.fill")
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func detailRow(_ label: String, _ value: String) -> some View {
+        HStack { Text(label); Spacer(); Text(value).foregroundStyle(.secondary) }
+    }
+
+    /// Save-on-change binding to an Int field of the session exercise.
+    private func intBinding(_ keyPath: ReferenceWritableKeyPath<WorkoutSessionExercise, Int>) -> Binding<Int> {
+        Binding(get: { exercise[keyPath: keyPath] },
+                set: { exercise[keyPath: keyPath] = $0; try? context.save() })
+    }
+    private var intensityBinding: Binding<CardioIntensity> {
+        Binding(get: { exercise.intensity ?? .moderate },
+                set: { exercise.intensity = $0; try? context.save() })
+    }
+    private var exerciseNotesBinding: Binding<String> {
+        Binding(get: { exercise.notes },
+                set: { exercise.notes = $0; try? context.save() })
+    }
+
+    private func markComplete() {
+        repo.markExerciseComplete(exercise, in: session)
+        try? context.save()
+        // If the user adjusted this cardio/stretching exercise and it has a library
+        // definition to update, ask whether to save the change as the future default.
+        if cardioStretchEdited && exercise.exerciseId != nil {
+            showUpdatePrompt = true
+        } else {
+            completeAndProceed()
+        }
+    }
+
+    private func captureOriginals() {
+        guard !capturedOriginals else { return }
+        capturedOriginals = true
+        origDuration = exercise.durationMinutes
+        origIntensityRaw = exercise.intensityRaw
+        origHold = exercise.holdSeconds
+        origSides = exercise.sides
+        origRounds = exercise.rounds
+    }
+
+    /// Whether the cardio/stretching values changed since the sheet opened.
+    private var cardioStretchEdited: Bool {
+        switch exercise.sectionType {
+        case .cardio:
+            return exercise.durationMinutes != origDuration || exercise.intensityRaw != origIntensityRaw
+        case .stretching:
+            return exercise.holdSeconds != origHold || exercise.sides != origSides || exercise.rounds != origRounds
+        case .strength:
+            return false
         }
     }
 
@@ -127,10 +267,11 @@ struct SessionExerciseSheet: View {
             // When not editing, only show the section if there's something to show.
             if editing || definition.photoData != nil || !definition.notes.isEmpty {
                 Section {
-                    if let data = definition.photoData, let uiImage = UIImage(data: data) {
-                        Image(uiImage: uiImage)
-                            .resizable().scaledToFill()
-                            .frame(maxWidth: .infinity).frame(height: 180).clipped()
+                    if let data = definition.photoData {
+                        // Whole image (no crop); animates + loops if it's a GIF.
+                        AnimatedImageView(data: data)
+                            .aspectRatio(AnimatedImageView.aspectRatio(of: data), contentMode: .fit)
+                            .frame(maxWidth: .infinity)
                             .listRowInsets(EdgeInsets())
                     }
                     if editing {
@@ -141,6 +282,7 @@ struct SessionExerciseSheet: View {
                             if CameraPicker.isAvailable {
                                 Spacer()
                                 Button { showCamera = true } label: { Label("Camera", systemImage: "camera") }
+                                    .buttonStyle(.borderless)   // own tap target (don't fire on row tap)
                             }
                         }
                         if definition.photoData != nil {
@@ -180,7 +322,10 @@ struct SessionExerciseSheet: View {
 
     // MARK: - Machine settings (static by default)
 
+    @ViewBuilder
     private var machineSettingsSection: some View {
+        // Stretching has no machine; cardio/strength show settings (and can add).
+        if exercise.sectionType != .stretching {
         Section {
             if exercise.machineSettings.isEmpty {
                 Text("No machine settings").foregroundStyle(.secondary)
@@ -210,6 +355,7 @@ struct SessionExerciseSheet: View {
             }
         } header: {
             Text("Machine settings")
+        }
         }
     }
 
@@ -314,18 +460,25 @@ struct SessionExerciseSheet: View {
             // Tap to skip the rest and make Complete Set available immediately.
             VStack(spacing: 4) {
                 Button { skipRest() } label: {
-                    SetActionButtonLabel(title: "Rest \(restTimer.formattedRemaining)",
-                                         progress: restTimer.progress)
+                    RestCountdownButton(title: "Rest \(restTimer.formattedRemaining)",
+                                        endDate: restTimer.endInstant,
+                                        totalSeconds: restTimer.totalSeconds,
+                                        isRunning: restTimer.isRunning,
+                                        isFinished: restTimer.isFinished)
                 }
                 .buttonStyle(.plain)
                 Text("Tap to skip rest").font(.caption2).foregroundStyle(.secondary)
             }
         } else {
-            // Timer expired or skipped: the action button for the next set.
+            // Timer expired or skipped: the action button for the next set. On the
+            // set that finishes the exercise, the label becomes the group-aware
+            // "Complete & Next" / "Complete <Group>".
+            let finishesExercise = exercise.sets.allSatisfy { $0.isCompleted || $0.id == set.id }
             Button {
                 complete(set, proxy: proxy)
             } label: {
-                SetActionButtonLabel(title: "Complete Set", systemImage: "checkmark.circle.fill")
+                SetActionButtonLabel(title: finishesExercise ? completeActionTitle : "Complete Set",
+                                     systemImage: "checkmark.circle.fill")
             }
             .buttonStyle(.plain)
         }
@@ -385,7 +538,7 @@ struct SessionExerciseSheet: View {
             if didEdit && fromRoutine {
                 showUpdatePrompt = true
             } else {
-                finishExercise()
+                completeAndProceed()
             }
         }
     }
@@ -396,6 +549,84 @@ struct SessionExerciseSheet: View {
         restTimer.stop()
         onExerciseCompleted()
         dismiss()
+    }
+
+    // MARK: - Complete & advance within an exercise-type group
+
+    /// The next still-incomplete exercise in THIS exercise's group, in list order
+    /// (preferring one after the current; otherwise the first remaining). Excludes
+    /// the current exercise. `nil` ⇒ completing this finishes the group.
+    private func nextInGroup() -> WorkoutSessionExercise? {
+        let others = session.orderedExercises.filter {
+            $0.sectionType == exercise.sectionType && $0.groupIndex == exercise.groupIndex
+                && $0.id != exercise.id && !$0.isFullyCompleted
+        }
+        return others.first(where: { $0.order > exercise.order }) ?? others.first
+    }
+
+    /// True when completing this exercise finishes its group.
+    private var completesGroup: Bool { nextInGroup() == nil }
+
+    /// Group-aware label for the complete action.
+    private var completeActionTitle: String {
+        completesGroup ? "Complete \(exercise.sectionType.displayName)" : "Complete & Next"
+    }
+
+    /// After the exercise is complete: jump to the next one in the group, or — if
+    /// it was the last — return to the workout screen and start the cooldown.
+    private func completeAndProceed() {
+        if let next = nextInGroup() {
+            restTimer.stop()
+            onAdvance(next)
+        } else {
+            finishExercise()
+        }
+    }
+
+    // MARK: - "This workout vs. future default" prompt (all groups)
+
+    private var promptTitle: String {
+        exercise.hasSets ? "Apply the new reps/weights to…" : "Apply the new values to…"
+    }
+    private var promptMessage: String {
+        exercise.hasSets
+            ? "You changed reps or weight. Save them as the routine's future default, or keep them just for this workout?"
+            : "You changed this exercise's values. Save them as the exercise's future default, or keep them just for this workout?"
+    }
+
+    /// Save the performed values as the future default (strength → routine +
+    /// exercise; cardio/stretching → the exercise definition).
+    private func applyFutureDefault() {
+        if exercise.hasSets { applyEditsToRoutineAndExercise() }
+        else { applyCardioStretchDefault() }
+    }
+
+    /// Finish after the future-default prompt: advance to the next exercise in the
+    /// group, or return to the workout screen if this was the last.
+    private func finishAfterPrompt() {
+        completeAndProceed()
+    }
+
+    /// Bake the adjusted cardio/stretching values into the library exercise so
+    /// future workouts use them by default.
+    private func applyCardioStretchDefault() {
+        guard let exId = exercise.exerciseId,
+              let def = try? context.fetch(
+                FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == exId })
+              ).first else { return }
+        switch exercise.sectionType {
+        case .cardio:
+            def.durationMinutes = exercise.durationMinutes
+            if let i = exercise.intensity { def.intensity = i }
+        case .stretching:
+            def.holdSeconds = exercise.holdSeconds
+            def.sides = exercise.sides
+            def.rounds = exercise.rounds
+        case .strength:
+            break
+        }
+        def.updatedAt = .now
+        try? context.save()
     }
 
     /// Bake the performed values into the routine (new version) and the library
@@ -435,46 +666,22 @@ struct SessionExerciseSheet: View {
     }
 }
 
-/// The big primary set button. It keeps ONE shape in every state so the rest
-/// countdown and the Complete Set action look identical except for the progress
-/// reveal:
-///   • `progress == nil` → a solid accent action button (e.g. "Complete Set").
-///   • `progress` set (0...1) → the between-reps rest countdown: a BRIGHT yellow
-///     fill is revealed left-to-right (a hard mask edge) over a DARK yellow track,
-///     advancing as time elapses.
+/// The big primary set action button — a solid accent button used for
+/// "Complete Set" / "Mark Complete". The rest countdown uses `RestCountdownButton`
+/// below, which shares the same shape and sizing so the two look identical apart
+/// from the fill.
 struct SetActionButtonLabel: View {
     var title: String
     var systemImage: String? = nil
-    /// nil = solid action button. 0...1 = rest countdown reveal.
-    var progress: Double? = nil
     var tint: Color = .accentColor
-
-    /// Rest-countdown colors.
-    private static let darkYellow = Color(red: 0.60, green: 0.47, blue: 0.0)
-    private static let brightYellow = Color(red: 1.0, green: 0.84, blue: 0.0)
 
     private let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
 
     var body: some View {
         ZStack {
-            if let progress {
-                // Dark yellow track…
-                shape.fill(Self.darkYellow)
-                // …with the bright yellow fill revealed across it as time elapses.
-                GeometryReader { geo in
-                    shape.fill(Self.brightYellow)
-                        .mask(alignment: .leading) {
-                            Rectangle()
-                                .frame(width: geo.size.width * min(max(progress, 0), 1))
-                        }
-                }
-                .animation(.linear(duration: 0.25), value: progress)
-            } else {
-                shape.fill(tint)
-            }
-
+            shape.fill(tint)
             BigActionLabel(title: title, systemImage: systemImage)
-                .foregroundStyle(progress == nil ? .white : .black)
+                .foregroundStyle(.white)
         }
         .frame(maxWidth: .infinity, minHeight: 50)
         .clipShape(shape)

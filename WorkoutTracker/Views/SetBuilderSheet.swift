@@ -74,13 +74,11 @@ struct SetBuilderSheet: View {
     private var definitionSection: some View {
         if let exercise, exercise.photoData != nil || !exercise.notes.isEmpty {
             Section {
-                if let data = exercise.photoData, let uiImage = UIImage(data: data) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
+                if let data = exercise.photoData {
+                    // Whole image (no crop); animates + loops if it's a GIF.
+                    AnimatedImageView(data: data)
+                        .aspectRatio(AnimatedImageView.aspectRatio(of: data), contentMode: .fit)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 180)
-                        .clipped()
                         .listRowInsets(EdgeInsets())
                 }
                 if !exercise.notes.isEmpty {
@@ -116,6 +114,7 @@ struct SetBuilderSheet: View {
             } label: {
                 Label("Add set (copies last)", systemImage: "plus.circle")
             }
+            .disabled(sets.count >= 15)
         } header: {
             Text("Sets")
         }

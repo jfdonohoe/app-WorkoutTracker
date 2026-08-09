@@ -27,6 +27,10 @@ struct CalendarView: View {
     @State private var pendingInstanceScope: InstanceEdit?
     @State private var pendingSchedDelete: SchedDelete?
     @EnvironmentObject private var restTimer: RestTimerService
+    /// Catalog reconciliation is a defensive full-sweep safety net (drift can
+    /// only enter via import/demo-seed, both handled at launch) — run it once
+    /// per session, not on every tab-switch `onAppear`.
+    @State private var hasSyncedCatalog = false
 
     private let cal = Calendar.current
     private let scheduleService = ScheduleService()
@@ -58,6 +62,13 @@ struct CalendarView: View {
                 .padding()
             }
             .navigationTitle("Calendar")
+            .onAppear {
+                guard !hasSyncedCatalog else { return }
+                hasSyncedCatalog = true
+                let sync = CatalogSyncService(context)
+                for routine in routines { sync.reconcileRoutine(routine) }
+                try? context.save()
+            }
             .fullScreenCover(isPresented: $showActive) {
                 if let current {
                     ActiveWorkoutView(session: current).environmentObject(restTimer)
@@ -195,7 +206,7 @@ struct CalendarView: View {
                         HStack {
                             Label(isPast ? "Missed: \(routine.name)" : "Scheduled: \(routine.name)",
                                   systemImage: isPast ? "exclamationmark.circle" : "calendar")
-                                .foregroundStyle(isPast ? .red : .blue)
+                                .foregroundStyle(isPast ? Theme.statusRed : Theme.statusBlue)
                             Spacer()
                             Menu {
                                 if !isPast {

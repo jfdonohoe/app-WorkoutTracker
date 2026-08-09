@@ -18,7 +18,7 @@ struct DataSafetyCheckView: View {
             Section {
                 HStack {
                     Image(systemName: allPass ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
-                        .foregroundStyle(allPass ? .green : .red)
+                        .foregroundStyle(allPass ? Theme.statusGreen : Theme.statusRed)
                         .font(.title)
                     Text(allPass ? "All integrity checks passing" : "Some checks need attention")
                         .font(.headline)
@@ -28,7 +28,7 @@ struct DataSafetyCheckView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Image(systemName: check.passed ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .foregroundStyle(check.passed ? .green : .red)
+                            .foregroundStyle(check.passed ? Theme.statusGreen : Theme.statusRed)
                         Text(check.title).font(.subheadline.bold())
                     }
                     Text(check.detail).font(.caption).foregroundStyle(.secondary)

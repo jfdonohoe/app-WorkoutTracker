@@ -17,10 +17,10 @@ final class ImmutabilityAndVersioningTests: XCTestCase {
     func test01_createRoutine() throws {
         let ctx = TestSupport.makeContext()
         let repo = RoutineRepository(ctx)
-        let routine = repo.createRoutine(name: "YMCA Full Body A")
+        let routine = repo.createRoutine(name: "Gym Full Body A")
         try ctx.save()
 
-        XCTAssertEqual(routine.name, "YMCA Full Body A")
+        XCTAssertEqual(routine.name, "Gym Full Body A")
         XCTAssertNotNil(routine.activeVersion)
         XCTAssertEqual(routine.activeVersion?.versionNumber, 1)
         XCTAssertEqual(routine.source, .user)
@@ -104,41 +104,43 @@ final class ImmutabilityAndVersioningTests: XCTestCase {
         XCTAssertEqual(routine.versions.count, 1)
     }
 
-    // 7. Saving a workout edit as future default creates a new RoutineVersion.
-    func test07_futureDefaultCreatesVersion() throws {
+    // 7. Editing a catalog Exercise's defaults updates an existing routine's
+    // RoutineExercise WITHOUT forking a new RoutineVersion — settings are a
+    // live-reconciled mirror of the catalog, not versioned routine content.
+    func test07_catalogEditUpdatesRoutineWithoutForkingVersion() throws {
         let ctx = TestSupport.makeContext()
-        let (routine, _, _) = TestSupport.buildRoutine(ctx, weight: 100)
-        let repo = RoutineRepository(ctx)
-        let workouts = WorkoutRepository(ctx)
-        let session = workouts.startWorkout(from: routine)
-        let sourceExId = session.exercises.first!.sourceRoutineExerciseId!
+        let (routine, exercise, _) = TestSupport.buildRoutine(ctx, weight: 100)
+        _ = WorkoutRepository(ctx).startWorkout(from: routine)
+        try ctx.save()
 
         XCTAssertEqual(routine.versions.count, 1)
-        repo.updateFutureDefault(routine: routine, sourceRoutineExerciseId: sourceExId) { $0.plannedWeight = 110 }
+        RoutineRepository(ctx).updateExerciseDefaults(exerciseId: exercise.id, sets: [(reps: 10, weight: 110)])
+        CatalogSyncService(ctx).reconcileExercise(exercise.id)
         try ctx.save()
 
-        XCTAssertEqual(routine.versions.count, 2)
-        XCTAssertEqual(routine.activeVersion?.versionNumber, 2)
-        // New version reflects the change; only the changed value differs.
-        let newEx = routine.activeVersion!.orderedSections.first { $0.type == .strength }!.orderedExercises.first!
-        XCTAssertEqual(newEx.plannedWeight, 110)
+        XCTAssertEqual(routine.versions.count, 1)
+        XCTAssertEqual(TestSupport.firstExercise(of: routine).plannedWeight, 110)
     }
 
-    // 8. Past sessions continue pointing to the old RoutineVersion.
-    func test08_pastSessionKeepsOldVersion() throws {
+    // 8. A LOCKED (finished) session's snapshot is unaffected by a later catalog
+    // edit — history stays exactly as recorded.
+    func test08_lockedSessionUnaffectedByLaterCatalogEdit() throws {
         let ctx = TestSupport.makeContext()
-        let (routine, _, _) = TestSupport.buildRoutine(ctx)
-        let repo = RoutineRepository(ctx)
+        let (routine, exercise, _) = TestSupport.buildRoutine(ctx, weight: 100, reps: 10, sets: 1)
         let workouts = WorkoutRepository(ctx)
         let session = workouts.startWorkout(from: routine)
-        let oldVersionId = session.routineVersionId
-        let sourceExId = session.exercises.first!.sourceRoutineExerciseId!
+        let set = session.exercises.flatMap(\.orderedSets).first!
+        workouts.completeSet(set, in: session, actualWeight: 100, actualReps: 10)
+        workouts.finishWorkout(session)
+        try ctx.save()
+        XCTAssertTrue(session.isLocked)
 
-        repo.updateFutureDefault(routine: routine, sourceRoutineExerciseId: sourceExId) { $0.plannedWeight = 200 }
+        RoutineRepository(ctx).updateExerciseDefaults(exerciseId: exercise.id, sets: [(reps: 5, weight: 200)])
+        CatalogSyncService(ctx).reconcileExercise(exercise.id)
         try ctx.save()
 
-        XCTAssertEqual(session.routineVersionId, oldVersionId)
-        XCTAssertNotEqual(routine.activeVersion?.id, oldVersionId)
+        XCTAssertEqual(set.plannedWeight, 100)
+        XCTAssertEqual(set.actualWeight, 100)
     }
 
     // 9. Completed sessions do not change when the routine is edited.
@@ -250,18 +252,20 @@ final class ImmutabilityAndVersioningTests: XCTestCase {
         XCTAssertFalse(session.exercises.first!.name.isEmpty)
     }
 
-    // 18. Per-set planned values snapshot into the session set-by-set.
+    // 18. Per-set planned values snapshot into the session set-by-set. Sets/rest
+    // are edited via the catalog Exercise (single source of truth) + reconcile —
+    // not by mutating the RoutineExercise mirror directly.
     func test18_perSetPlannedSnapshot() throws {
         let ctx = TestSupport.makeContext()
         let (routine, exercise, _) = TestSupport.buildRoutine(ctx)
         let repo = RoutineRepository(ctx)
-        let re = TestSupport.firstExercise(of: routine)
         // Define three distinct sets.
-        repo.setPlannedSets(re, sets: [(reps: 12, weight: 100),
-                                       (reps: 10, weight: 110),
-                                       (reps: 8, weight: 120)], restBetweenSets: 75)
+        repo.updateExerciseDefaults(exerciseId: exercise.id, sets: [(reps: 12, weight: 100),
+                                                                     (reps: 10, weight: 110),
+                                                                     (reps: 8, weight: 120)])
+        exercise.defaultRest = 75
+        CatalogSyncService(ctx).reconcileExercise(exercise.id)
         try ctx.save()
-        _ = exercise
 
         let workouts = WorkoutRepository(ctx)
         let session = workouts.startWorkout(from: routine)
@@ -289,5 +293,33 @@ final class ImmutabilityAndVersioningTests: XCTestCase {
 
         XCTAssertNotNil(session.endedAt)
         XCTAssertEqual(session.duration ?? 0, 600, accuracy: 1)
+    }
+
+    // 20. Reconciling a catalog edit for one exercise must not disturb another
+    // exercise's independently-reconciled values in the same routine.
+    func test20_reconcileAppliesIndependentlyToMultipleExercisesInOneRoutine() throws {
+        let ctx = TestSupport.makeContext()
+        let repo = RoutineRepository(ctx)
+        let sync = CatalogSyncService(ctx)
+
+        let routine = repo.createRoutine(name: "Two Exercise Routine")
+        let strength = repo.addSection(to: routine.activeVersion!, type: .strength)
+        let exA = Exercise(name: "Bench Press", source: .user)
+        ctx.insert(exA)
+        repo.addExercise(to: strength, exercise: exA, setCount: 1, plannedWeight: 50, plannedReps: 10)
+        let exB = Exercise(name: "Pull Down", source: .user)
+        ctx.insert(exB)
+        repo.addExercise(to: strength, exercise: exB, setCount: 1, plannedWeight: 0, plannedReps: 10)
+        try ctx.save()
+
+        repo.updateExerciseDefaults(exerciseId: exA.id, sets: [(reps: 10, weight: 55)])
+        sync.reconcileExercise(exA.id)
+        repo.updateExerciseDefaults(exerciseId: exB.id, sets: [(reps: 10, weight: 70)])
+        sync.reconcileExercise(exB.id)
+        try ctx.save()
+
+        let finalSections = routine.activeVersion!.orderedSections.first!.orderedExercises
+        XCTAssertEqual(finalSections.first { $0.displayName == "Bench Press" }?.plannedWeight, 55)
+        XCTAssertEqual(finalSections.first { $0.displayName == "Pull Down" }?.plannedWeight, 70)
     }
 }

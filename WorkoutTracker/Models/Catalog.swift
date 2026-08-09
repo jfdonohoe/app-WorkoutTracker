@@ -23,7 +23,7 @@ import SwiftData
 
 // MARK: - Gym Location
 
-/// A physical gym. v1 assumes a single YMCA location, but the model supports
+/// A physical gym. v1 assumes a single gym location, but the model supports
 /// multiple locations so machine settings can later differ per location.
 @Model
 final class GymLocation {

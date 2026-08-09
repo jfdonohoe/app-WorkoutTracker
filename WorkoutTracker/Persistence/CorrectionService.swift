@@ -97,32 +97,3 @@ enum CorrectedView {
         latest(session, entityId: set.id, field: field) != nil
     }
 }
-
-extension RoutineRepository {
-    /// Apply a single-field change as a FUTURE default by creating a new routine
-    /// version and editing only the matching exercise. Past sessions keep the
-    /// old version (principles #2, #3, #7). Only the changed value differs in the
-    /// new version; everything else is an exact copy.
-    func updateFutureDefault(routine: Routine,
-                             sourceRoutineExerciseId: UUID,
-                             apply change: (RoutineExercise) -> Void) {
-        guard let active = routine.activeVersion else { return }
-        // Capture the position of the target exercise in the current version.
-        var sectionOrder: Int?
-        var exerciseOrder: Int?
-        for section in active.sections {
-            if let ex = section.exercises.first(where: { $0.id == sourceRoutineExerciseId }) {
-                sectionOrder = section.order
-                exerciseOrder = ex.order
-                break
-            }
-        }
-        guard let so = sectionOrder, let eo = exerciseOrder else { return }
-
-        let newVersion = makeNewVersion(of: routine, note: "Saved change from a workout")
-        if let ns = newVersion.sections.first(where: { $0.order == so }),
-           let ne = ns.exercises.first(where: { $0.order == eo }) {
-            change(ne)
-        }
-    }
-}

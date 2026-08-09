@@ -2,11 +2,20 @@
 //  SeedDataService.swift
 //  WorkoutTracker
 //
-//  Builds sample YMCA machine-only routines + a little history as DEMO data.
+//  Builds sample gym machine-only routines + a little history as DEMO data.
 //  Everything created here is source == .seedDemo so it stays traceable for the
 //  one-click "Delete Demo Data" feature, even after the user edits it.
 //
-//  Idempotent: seeds only when no demo data exists yet.
+//  Demo data policy, reconciled on every app launch via `reconcileDemoData()`:
+//    - Before the user has any data of their own, demo data is kept present
+//      by default — it's reseeded automatically if missing — UNLESS the user
+//      explicitly deleted it via "Delete Demo Data", in which case it stays
+//      gone until they explicitly reseed.
+//    - The moment the user's own data first appears, demo data is deleted
+//      automatically and this graduation is permanent: from then on demo data
+//      never reappears on its own, no matter what happens to user data later.
+//      The only way to bring it back after that is the explicit "Re-seed
+//      demo data" action in Settings, which calls `seed()` directly.
 //
 
 import Foundation
@@ -20,32 +29,63 @@ struct SeedDataService {
 
     private let demo: DataSource = .seedDemo
 
-    func seedIfNeeded() {
-        let demoRoutines = (try? context.fetchCount(
-            FetchDescriptor<Routine>(predicate: #Predicate { $0.sourceRaw == "seedDemo" })
-        )) ?? 0
-        guard demoRoutines == 0 else { return }
+    /// Permanent once set: the user has real data, so demo data must never
+    /// automatically reappear again.
+    static let hasGraduatedFromDemoKey = "com.workouttracker.hasGraduatedFromDemo"
+    /// Set when the user explicitly deletes demo data (pre-graduation), so it
+    /// isn't silently reseeded again on the next launch. Cleared whenever
+    /// fresh demo data is seeded.
+    static let userDeletedDemoKey = "com.workouttracker.userDeletedDemoManually"
+
+    /// Call on every app launch to reconcile demo data against the rules
+    /// above. Cheap to call repeatedly: once graduated, it's a single
+    /// UserDefaults read and returns immediately.
+    func reconcileDemoData() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.hasGraduatedFromDemoKey) else { return }
+
+        if hasExistingUserData() {
+            defaults.set(true, forKey: Self.hasGraduatedFromDemoKey)
+            if DemoDataManager(context).hasDemoData() {
+                DemoDataManager(context).deleteAllDemoData()
+                try? context.save()
+            }
+            return
+        }
+
+        guard !DemoDataManager(context).hasDemoData() else { return }
+        guard !defaults.bool(forKey: Self.userDeletedDemoKey) else { return }
         seed()
+    }
+
+    private func hasExistingUserData() -> Bool {
+        let routines = (try? context.fetchCount(
+            FetchDescriptor<Routine>(predicate: #Predicate { $0.sourceRaw == "user" })
+        )) ?? 0
+        let sessions = (try? context.fetchCount(
+            FetchDescriptor<WorkoutSession>(predicate: #Predicate { $0.sourceRaw == "user" })
+        )) ?? 0
+        return routines + sessions > 0
     }
 
     func seed() {
         let routines = RoutineRepository(context)
         let workouts = WorkoutRepository(context)
 
-        // Single YMCA location.
-        let ymca = GymLocation(name: "YMCA", source: demo)
-        context.insert(ymca)
+        // Single gym location.
+        let gym = GymLocation(name: "Gym", source: demo)
+        context.insert(gym)
 
         // Machines with shared settings (values 1...15 pickers).
-        let legPress = makeMachine("Leg Press", location: ymca,
+        let legPress = makeMachine("Leg Press", location: gym,
                                    settings: [("Seat height", 5), ("Back angle", 3)])
-        let chestPress = makeMachine("Chest Press", location: ymca,
+        let chestPress = makeMachine("Chest Press", location: gym,
                                      settings: [("Seat height", 6), ("Handle position", 2)])
-        let latPulldown = makeMachine("Lat Pulldown", location: ymca,
+        let latPulldown = makeMachine("Lat Pulldown", location: gym,
                                       settings: [("Seat height", 4), ("Thigh pad", 7)])
-        let seatedRow = makeMachine("Seated Row", location: ymca,
+        let seatedRow = makeMachine("Seated Row", location: gym,
                                     settings: [("Chest pad", 5), ("Seat height", 6)])
-        let shoulderPress = makeMachine("Shoulder Press", location: ymca,
+        let shoulderPress = makeMachine("Shoulder Press", location: gym,
                                         settings: [("Seat height", 8)])
 
         // Exercises linked to machines.
@@ -55,8 +95,8 @@ struct SeedDataService {
         let exRow = makeExercise("Seated Row", machine: seatedRow)
         let exShoulder = makeExercise("Shoulder Press", machine: shoulderPress)
 
-        // ---- Routine: YMCA Full Body A ----
-        let routineA = routines.createRoutine(name: "YMCA Full Body A", source: demo)
+        // ---- Routine: Gym Full Body A ----
+        let routineA = routines.createRoutine(name: "Gym Full Body A", source: demo)
         if let v = routineA.activeVersion {
             v.source = demo
             let strength = routines.addSection(to: v, type: .strength)
@@ -67,8 +107,8 @@ struct SeedDataService {
             _ = cardio
         }
 
-        // ---- Routine: YMCA Full Body B ----
-        let routineB = routines.createRoutine(name: "YMCA Full Body B", source: demo)
+        // ---- Routine: Gym Full Body B ----
+        let routineB = routines.createRoutine(name: "Gym Full Body B", source: demo)
         if let v = routineB.activeVersion {
             v.source = demo
             let strength = routines.addSection(to: v, type: .strength)
@@ -94,6 +134,7 @@ struct SeedDataService {
         seedPastSession(workouts, routine: routineB, daysAgo: 4, completeAll: false) // partial
 
         try? context.save()
+        UserDefaults.standard.set(false, forKey: Self.userDeletedDemoKey)
     }
 
     // MARK: - Builders

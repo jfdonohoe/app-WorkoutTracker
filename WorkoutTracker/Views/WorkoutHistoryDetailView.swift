@@ -43,6 +43,16 @@ struct WorkoutHistoryDetailView: View {
                 } label: {
                     Label("Delete workout", systemImage: "trash").frame(maxWidth: .infinity)
                 }
+                .confirmationDialog("Delete this workout?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+                    Button("Delete workout", role: .destructive) {
+                        WorkoutRepository(context).softDeleteSession(session)
+                        try? context.save()
+                        if isSummary { onClose() } else { dismiss() }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This removes the workout from your calendar and history.")
+                }
             }
         }
         .navigationTitle(session.routineName)
@@ -60,22 +70,12 @@ struct WorkoutHistoryDetailView: View {
         .sheet(item: $correcting) { set in
             CorrectionSheet(session: session, set: set, service: service)
         }
-        .confirmationDialog("Delete this workout?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button("Delete workout", role: .destructive) {
-                WorkoutRepository(context).softDeleteSession(session)
-                try? context.save()
-                if isSummary { onClose() } else { dismiss() }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes the workout from your calendar and history.")
-        }
     }
 
     private var successSection: some View {
         Section {
             VStack(spacing: 10) {
-                Image(systemName: "checkmark.seal.fill").font(.system(size: 44)).foregroundStyle(.green)
+                Image(systemName: "checkmark.seal.fill").font(.system(size: 44)).foregroundStyle(Theme.statusGreen)
                 Text("Workout complete!").font(.title2.bold())
                 Text(successMessage).font(.subheadline).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -95,6 +95,12 @@ struct WorkoutHistoryDetailView: View {
     private var summarySection: some View {
         Section {
             row("Date", (session.completedAt ?? session.startedAt ?? .now).formatted(date: .abbreviated, time: .shortened))
+            if let started = session.startedAt {
+                row("Started", started.formatted(date: .omitted, time: .shortened))
+            }
+            if let ended = session.endedAt {
+                row("Ended", ended.formatted(date: .omitted, time: .shortened))
+            }
             row("Status", session.status.displayName)
             let exs = session.orderedExercises
             row("Completed", "\(exs.filter(\.isFullyCompleted).count)")
@@ -103,7 +109,7 @@ struct WorkoutHistoryDetailView: View {
             let sets = exs.flatMap(\.sets)
             row("Sets completed", "\(sets.filter(\.isCompleted).count) / \(sets.count)")
             if session.source == .seedDemo {
-                Label("Demo data", systemImage: "testtube.2").font(.caption).foregroundStyle(.orange)
+                Label("Demo data", systemImage: "testtube.2").font(.caption).foregroundStyle(Theme.statusOrange)
             }
             if session.isLocked {
                 Label("Locked history — immutable", systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary)
@@ -113,6 +119,12 @@ struct WorkoutHistoryDetailView: View {
 
     private func exerciseSection(_ ex: WorkoutSessionExercise) -> some View {
         Section {
+            if let started = ex.startedAt {
+                row("Started", started.formatted(date: .omitted, time: .shortened))
+            }
+            if let ended = ex.endedAt {
+                row("Ended", ended.formatted(date: .omitted, time: .shortened))
+            }
             if !ex.machineSettings.isEmpty {
                 ForEach(ex.machineSettings.sorted { $0.order < $1.order }) { s in
                     row(s.label, s.displayValue)
@@ -137,9 +149,9 @@ struct WorkoutHistoryDetailView: View {
             HStack {
                 Text(ex.name)
                 Spacer()
-                if ex.isSkipped { Text("Skipped").foregroundStyle(.red) }
-                else if ex.isPartiallyIncomplete { Text("Partial").foregroundStyle(.orange) }
-                else if ex.isFullyCompleted { Text("Done").foregroundStyle(.green) }
+                if ex.isSkipped { Text("Skipped").foregroundStyle(Theme.statusRed) }
+                else if ex.isPartiallyIncomplete { Text("Partial").foregroundStyle(Theme.statusOrange) }
+                else if ex.isFullyCompleted { Text("Done").foregroundStyle(Theme.statusGreen) }
             }
         }
     }
@@ -154,7 +166,7 @@ struct WorkoutHistoryDetailView: View {
         } label: {
             HStack {
                 Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(set.isCompleted ? .green : .secondary)
+                    .foregroundStyle(set.isCompleted ? Theme.statusGreen : .secondary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Set \(set.index + 1)")
                     Text("Planned \(Int(set.plannedWeight)) lb × \(set.plannedReps)")
@@ -164,19 +176,23 @@ struct WorkoutHistoryDetailView: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     if set.isCompleted {
                         Text("\(Int(effW ?? 0)) lb × \(effR ?? 0)")
-                            .foregroundStyle(wCorrected || rCorrected ? .blue : .primary)
+                            .foregroundStyle(wCorrected || rCorrected ? Theme.statusBlue : .primary)
+                        if let delta = Self.deltaText(actualWeight: effW, actualReps: effR,
+                                                      plannedWeight: set.plannedWeight, plannedReps: set.plannedReps) {
+                            Text(delta).font(.caption2).foregroundStyle(Theme.statusOrange)
+                        }
                         if let e = set.perceivedEffort {
                             Text(e.displayName).font(.caption2).foregroundStyle(.secondary)
                         }
                         if wCorrected || rCorrected {
-                            Text("corrected").font(.caption2).foregroundStyle(.blue)
+                            Text("corrected").font(.caption2).foregroundStyle(Theme.statusBlue)
                         }
                     } else {
                         Text("—").foregroundStyle(.tertiary)
                     }
                 }
                 if correctionMode && set.isCompleted {
-                    Image(systemName: "pencil.circle").foregroundStyle(.blue)
+                    Image(systemName: "pencil.circle").foregroundStyle(Theme.statusBlue)
                 }
             }
         }
@@ -200,6 +216,22 @@ struct WorkoutHistoryDetailView: View {
 
     private func row(_ label: String, _ value: String) -> some View {
         HStack { Text(label); Spacer(); Text(value).foregroundStyle(.secondary) }
+    }
+
+    /// Signed weight/reps difference from what was planned, e.g. "+10 lb, -2 reps".
+    /// `nil` when the set matches the plan exactly (nothing to call out).
+    static func deltaText(actualWeight: Double?, actualReps: Int?,
+                          plannedWeight: Double, plannedReps: Int) -> String? {
+        var parts: [String] = []
+        if let w = actualWeight {
+            let d = Int(w - plannedWeight)
+            if d != 0 { parts.append("\(d > 0 ? "+" : "")\(d) lb") }
+        }
+        if let r = actualReps {
+            let d = r - plannedReps
+            if d != 0 { parts.append("\(d > 0 ? "+" : "")\(d) reps") }
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 }
 

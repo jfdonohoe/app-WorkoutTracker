@@ -82,10 +82,10 @@ struct ImportExportView: View {
                     Label("Import from backup file", systemImage: "square.and.arrow.down")
                 }
                 if let importMessage {
-                    Label(importMessage, systemImage: "checkmark.circle").foregroundStyle(.green)
+                    Label(importMessage, systemImage: "checkmark.circle").foregroundStyle(Theme.statusGreen)
                 }
                 if let errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+                    Label(errorMessage, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.statusRed)
                 }
             } header: {
                 Text("Import")
@@ -118,10 +118,10 @@ struct ImportExportView: View {
                     Label("Import \(exGroup.displayName.lowercased()) exercises", systemImage: "dumbbell")
                 }
                 if let exMessage {
-                    Label(exMessage, systemImage: "checkmark.circle").foregroundStyle(.green)
+                    Label(exMessage, systemImage: "checkmark.circle").foregroundStyle(Theme.statusGreen)
                 }
                 if let exError {
-                    Label(exError, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+                    Label(exError, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.statusRed)
                 }
                 // Live status of the linked-photo downloads.
                 if photoStatus.isDownloading {
@@ -133,10 +133,10 @@ struct ImportExportView: View {
                 } else if photoStatus.isFinished {
                     if photoStatus.failed > 0 {
                         Label("\(photoStatus.done) photo\(photoStatus.done == 1 ? "" : "s") added · \(photoStatus.failed) couldn't be fetched",
-                              systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                              systemImage: "exclamationmark.triangle").foregroundStyle(Theme.statusOrange)
                     } else if photoStatus.done > 0 {
                         Label("\(photoStatus.done) photo\(photoStatus.done == 1 ? "" : "s") added",
-                              systemImage: "photo").foregroundStyle(.green)
+                              systemImage: "photo").foregroundStyle(Theme.statusGreen)
                     }
                 }
             } header: {
@@ -163,10 +163,10 @@ struct ImportExportView: View {
                     Label("Import routines from CSV", systemImage: "tablecells.badge.ellipsis")
                 }
                 if let csvMessage {
-                    Label(csvMessage, systemImage: "checkmark.circle").foregroundStyle(.green)
+                    Label(csvMessage, systemImage: "checkmark.circle").foregroundStyle(Theme.statusGreen)
                 }
                 if let csvError {
-                    Label(csvError, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+                    Label(csvError, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.statusRed)
                 }
             } header: {
                 Text("Routines from CSV")

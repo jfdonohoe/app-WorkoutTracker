@@ -29,6 +29,10 @@ struct TodayWorkoutView: View {
     @State private var summarySession: WorkoutSession?
     @State private var newRoutineToEdit: Routine?
     @State private var pendingDelete: DeleteTarget?
+    /// Catalog reconciliation is a defensive full-sweep safety net (drift can
+    /// only enter via import/demo-seed, both handled at launch) — run it once
+    /// per session, not on every tab-switch `onAppear`.
+    @State private var hasSyncedCatalog = false
     /// What to do once a newly created routine is saved.
     private enum CreateMode { case startNow, laterToday }
     @State private var createMode: CreateMode = .laterToday
@@ -91,6 +95,14 @@ struct TodayWorkoutView: View {
                 .listStyle(.insetGrouped)
                 .headerProminence(.increased)
                 .navigationTitle("Today")
+                .onAppear {
+                    guard !hasSyncedCatalog else { return }
+                    hasSyncedCatalog = true
+                    let sync = CatalogSyncService(context)
+                    for routine in routines { sync.reconcileRoutine(routine) }
+                    for session in sessions { sync.reconcileSession(session) }
+                    try? context.save()
+                }
                 .sheet(item: $workoutSession, onDismiss: presentSummaryIfNeeded) { s in
                     // Only show the summary for a fully completed workout; partial/
                     // abandoned ones just return to Today.
@@ -207,7 +219,7 @@ struct TodayWorkoutView: View {
     private func completedSection(_ session: WorkoutSession) -> some View {
         Section {
             VStack(spacing: 10) {
-                Image(systemName: "checkmark.seal.fill").font(.largeTitle).foregroundStyle(.green)
+                Image(systemName: "checkmark.seal.fill").font(.largeTitle).foregroundStyle(Theme.statusGreen)
                 Text("Workout complete").font(.title3.bold())
                 if let d = session.duration {
                     Text("\(session.status.displayName) · \(Int(d / 60)) min")

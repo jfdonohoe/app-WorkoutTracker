@@ -198,6 +198,11 @@ final class WorkoutSessionExercise {
     /// True if the user added this exercise spontaneously during the workout.
     var isAddedDuringWorkout: Bool
 
+    /// When the user first opened this exercise's logging sheet, and when it
+    /// became fully completed. Both nil until reached; shown in the summary.
+    var startedAt: Date?
+    var endedAt: Date?
+
     // Group-specific snapshot (defaults so this is a lightweight schema addition).
     // Cardio uses durationMinutes + intensity; stretching uses hold/sides/rounds.
     var durationMinutes: Int = 0

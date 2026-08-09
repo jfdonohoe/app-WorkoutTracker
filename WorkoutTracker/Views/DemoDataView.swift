@@ -38,17 +38,22 @@ struct DemoDataView: View {
                     Label("Delete Demo Data", systemImage: "trash")
                 }
                 .disabled(demoRoutines.isEmpty && demoSessions.isEmpty)
+                .confirmationDialog("Delete all demo data?", isPresented: $showConfirm, titleVisibility: .visible) {
+                    Button("Delete demo data", role: .destructive) { deleteDemo() }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("This cannot be undone, but it only removes demo-originated data.")
+                }
 
                 Button {
-                    SeedDataService(context).seedIfNeeded()
-                    try? context.save()
+                    SeedDataService(context).seed()
                 } label: {
                     Label("Re-seed demo data", systemImage: "arrow.clockwise")
                 }
                 .disabled(!(demoRoutines.isEmpty && demoSessions.isEmpty))
 
                 if let resultMessage {
-                    Label(resultMessage, systemImage: "checkmark.circle").foregroundStyle(.green)
+                    Label(resultMessage, systemImage: "checkmark.circle").foregroundStyle(Theme.statusGreen)
                 }
             } footer: {
                 Text("Deletes everything that started as demo data, including demo records you edited. Your own workouts are never touched.")
@@ -70,12 +75,6 @@ struct DemoDataView: View {
             #endif
         }
         .navigationTitle("Demo Data")
-        .confirmationDialog("Delete all demo data?", isPresented: $showConfirm, titleVisibility: .visible) {
-            Button("Delete demo data", role: .destructive) { deleteDemo() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This cannot be undone, but it only removes demo-originated data.")
-        }
     }
 
     private func row(_ label: String, _ count: Int) -> some View {

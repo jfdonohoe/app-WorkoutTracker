@@ -78,6 +78,8 @@ struct ExerciseLibraryView: View {
         for i in offsets {
             list[i].deletedAt = .now
             list[i].updatedAt = .now
+            RoutineRepository(context).removeExerciseFromAllRoutines(exerciseId: list[i].id)
+            WorkoutRepository(context).removeExerciseFromActiveSessions(exerciseId: list[i].id)
         }
         try? context.save()
     }

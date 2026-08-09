@@ -34,6 +34,14 @@ struct ActiveWorkoutView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close") { showStopConfirm = true }
+                        .confirmationDialog("Stop your workout?", isPresented: $showStopConfirm, titleVisibility: .visible) {
+                            Button("Yes, stop", role: .destructive) {
+                                try? context.save()
+                                restTimer.stop()
+                                dismiss()
+                            }
+                            Button("No", role: .cancel) {}
+                        }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Edit") { showEditor = true }
@@ -41,14 +49,6 @@ struct ActiveWorkoutView: View {
             }
             .sheet(isPresented: $showEditor) {
                 SessionEditorView(session: session)
-            }
-            .confirmationDialog("Stop your workout?", isPresented: $showStopConfirm, titleVisibility: .visible) {
-                Button("Yes, stop", role: .destructive) {
-                    try? context.save()
-                    restTimer.stop()
-                    dismiss()
-                }
-                Button("No", role: .cancel) {}
             }
         }
     }

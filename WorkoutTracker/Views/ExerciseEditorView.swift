@@ -96,6 +96,21 @@ struct ExerciseEditorView: View {
                     Button(role: .destructive) { showDeleteConfirm = true } label: {
                         Label("Delete exercise", systemImage: "trash").frame(maxWidth: .infinity)
                     }
+                    .confirmationDialog("Delete this exercise?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+                        Button("Delete exercise", role: .destructive) {
+                            if let existing {
+                                existing.deletedAt = .now
+                                existing.updatedAt = .now
+                                RoutineRepository(context).removeExerciseFromAllRoutines(exerciseId: existing.id)
+                                WorkoutRepository(context).removeExerciseFromActiveSessions(exerciseId: existing.id)
+                                try? context.save()
+                            }
+                            dismiss()
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("It will be removed from your library. Past workouts that used it are unaffected.")
+                    }
                 }
             }
         }
@@ -122,15 +137,6 @@ struct ExerciseEditorView: View {
                 CameraPicker { image in photoData = image.jpegData(compressionQuality: 0.8) }
                     .ignoresSafeArea()
             }
-        }
-        .confirmationDialog("Delete this exercise?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button("Delete exercise", role: .destructive) {
-                if let existing { existing.deletedAt = .now; existing.updatedAt = .now; try? context.save() }
-                dismiss()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("It will be removed from your library. Past workouts that used it are unaffected.")
         }
     }
 
@@ -345,6 +351,10 @@ struct ExerciseEditorView: View {
             exercise.machineId = nil
         }
 
+        // Push these catalog changes into every routine/in-progress session
+        // that references this exercise (and its machine) right away, rather
+        // than waiting for each to be reconciled defensively on next view.
+        CatalogSyncService(context).reconcileExercise(exercise.id)
         try? context.save()
         dismiss()
     }

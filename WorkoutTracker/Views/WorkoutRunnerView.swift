@@ -79,7 +79,7 @@ struct WorkoutRunnerView: View {
                 .buttonStyle(.borderedProminent)
                 // Completed → brand green "Finish Workout"; abandoned/incomplete →
                 // black "Stop Workout".
-                .tint(allSetsComplete ? Theme.accent : .black)
+                .tint(allSetsComplete ? Theme.accent : Theme.statusBlack)
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
                 // Stop-and-lock confirmation, attached to the button that triggers it.
@@ -100,6 +100,10 @@ struct WorkoutRunnerView: View {
                                  onAdvance: { next in openExercise = next })
                 .environmentObject(restTimer)
                 .id(ex.id)   // fresh state when auto-advancing to the next exercise
+        }
+        .onAppear {
+            CatalogSyncService(context).reconcileSession(session)
+            try? context.save()
         }
     }
 
@@ -122,7 +126,7 @@ struct WorkoutRunnerView: View {
         HStack(spacing: 12) {
             Image(systemName: ex.isFullyCompleted ? "checkmark.circle.fill"
                   : (ex.isPartiallyIncomplete ? "circle.lefthalf.filled" : "circle"))
-                .foregroundStyle(ex.isFullyCompleted ? .green : .secondary)
+                .foregroundStyle(ex.isFullyCompleted ? Theme.statusGreen : .secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text(ex.name).font(.body)
                 Text(exerciseSubtitle(ex))

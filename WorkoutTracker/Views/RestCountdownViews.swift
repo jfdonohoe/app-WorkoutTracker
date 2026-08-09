@@ -152,7 +152,7 @@ struct RestCountdownButton: View {
         ZStack {
             RestFill(endDate: endDate, totalSeconds: totalSeconds, isRunning: isRunning, isFinished: isFinished)
 
-            BigActionLabel(title: title).foregroundStyle(.black)
+            BigActionLabel(title: title).foregroundStyle(Theme.statusBlack)
             BigActionLabel(title: title).foregroundStyle(.white)
                 .mask {
                     RevealMask(endDate: endDate, totalSeconds: totalSeconds, isRunning: isRunning, isFinished: isFinished)

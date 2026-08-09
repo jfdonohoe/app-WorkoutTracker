@@ -16,7 +16,9 @@ enum TestSupport {
 
     /// A fresh in-memory context per test (no disk, no leakage).
     static func makeContext() -> ModelContext {
-        AppContainer.makeInMemory().mainContext
+        let ctx = ModelContext(AppContainer.makeInMemory())
+        ctx.autosaveEnabled = false
+        return ctx
     }
 
     /// Build a routine with one strength section containing one machine-based

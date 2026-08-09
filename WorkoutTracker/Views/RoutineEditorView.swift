@@ -55,7 +55,7 @@ struct RoutineEditorView: View {
     var body: some View {
         List {
             Section("Routine name") {
-                TextField("Name (e.g. YMCA Full Body A)", text: $routine.name)
+                TextField("Name (e.g. Gym Full Body A)", text: $routine.name)
             }
 
             if didFork {
@@ -87,22 +87,25 @@ struct RoutineEditorView: View {
                     Button(role: .destructive) { showDeleteConfirm = true } label: {
                         Label("Delete routine", systemImage: "trash").frame(maxWidth: .infinity)
                     }
+                    .confirmationDialog("Delete this routine?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+                        Button("Delete routine", role: .destructive) {
+                            repo.softDelete(routine)
+                            try? context.save()
+                            dismiss()
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("It will be removed from your routines. Past workouts are unaffected.")
+                    }
                 }
             }
         }
-        .onAppear(perform: loadSchedule)
+        .onAppear {
+            loadSchedule()
+            CatalogSyncService(context).reconcileRoutine(routine)
+        }
         .onChange(of: scheduleEnabled) { _, _ in scheduleChanged() }
         .onChange(of: recurrence) { _, _ in scheduleChanged() }
-        .confirmationDialog("Delete this routine?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button("Delete routine", role: .destructive) {
-                repo.softDelete(routine)
-                try? context.save()
-                dismiss()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("It will be removed from your routines. Past workouts are unaffected.")
-        }
         .navigationTitle(isCreating ? "New Routine" : routine.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -424,12 +427,19 @@ struct RoutineEditorView: View {
         save()
     }
 
+    /// Sets/reps/weight/rest are exercise SETTINGS, not routine structure — they
+    /// write straight to the catalog Exercise (single source of truth) and
+    /// reconcile every routine/in-progress session that references it, rather
+    /// than forking a routine version.
     private func saveSets(to exercise: RoutineExercise, sets: [(reps: Int, weight: Double)], rest: Int) {
-        ensureEditableVersion()
-        guard let target = resolveExercise(exercise) else { return }
-        let routineRest = displayVersion?.defaultRestBetweenSets ?? rest
-        repo.setPlannedSets(target, sets: sets, restBetweenSets: routineRest)
-        save()
+        let exerciseId = exercise.exerciseId
+        repo.updateExerciseDefaults(exerciseId: exerciseId, sets: sets)
+        if let def = try? context.fetch(FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == exerciseId })).first {
+            def.defaultRest = rest
+            def.updatedAt = .now
+        }
+        CatalogSyncService(context).reconcileExercise(exerciseId)
+        try? context.save()
     }
 
     private func resolveExercise(_ ex: RoutineExercise) -> RoutineExercise? {

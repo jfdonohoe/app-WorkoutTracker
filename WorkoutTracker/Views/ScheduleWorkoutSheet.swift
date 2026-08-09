@@ -56,14 +56,15 @@ struct ScheduleWorkoutSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Schedule") { onSchedule() }.disabled(selectedRoutineId == nil)
+                    Button("Schedule") { onSchedule() }
+                        .disabled(selectedRoutineId == nil)
+                        .confirmationDialog("This routine was edited. Save changes as a new routine?",
+                                            isPresented: $showSaveAsNew, titleVisibility: .visible) {
+                            Button("Save as a new routine") { commit(saveAsNew: true) }
+                            Button("Update the existing routine") { commit(saveAsNew: false) }
+                            Button("Cancel", role: .cancel) {}
+                        }
                 }
-            }
-            .confirmationDialog("This routine was edited. Save changes as a new routine?",
-                                isPresented: $showSaveAsNew, titleVisibility: .visible) {
-                Button("Save as a new routine") { commit(saveAsNew: true) }
-                Button("Update the existing routine") { commit(saveAsNew: false) }
-                Button("Cancel", role: .cancel) {}
             }
             .onAppear {
                 if !didInit {

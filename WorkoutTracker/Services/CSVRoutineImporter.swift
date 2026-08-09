@@ -105,12 +105,12 @@ struct CSVRoutineImporter {
     /// group so users can see exactly which columns each group uses.
     static let exampleCSV = """
     routine,group,exercise,machine,machine_settings,set1_reps,set1_weight,set2_reps,set2_weight,set3_reps,set3_weight,set4_reps,set4_weight,set5_reps,set5_weight,duration_min,intensity,hold_seconds,sides,rounds,set_cooldown,exercise_cooldown,notes
-    YMCA Full Body A,strength,Leg Press,Leg Press,Seat height=5; Back angle=3,12,100,10,120,10,120,8,140,6,160,,,,,,90,180,Pyramid up
-    YMCA Full Body A,strength,Chest Press,Chest Press,Seat height=6,10,60,10,60,10,60,,,,,,,,,,60,,
-    YMCA Full Body A,cardio,Treadmill,,,,,,,,,,,,,20,moderate,,,,,,Steady pace
-    YMCA Full Body A,stretching,Hamstring Stretch,,,,,,,,,,,,,,,30,2,3,,,Keep back flat
-    YMCA Full Body B,strength,Seated Row,Seated Row,Chest pad=5; Seat height=6,10,70,10,70,8,80,6,90,,,,,,,,75,120,
-    YMCA Full Body B,cardio,Stationary Bike,,,,,,,,,,,,,15,low,,,,,,Cooldown spin
+    Gym Full Body A,strength,Leg Press,Leg Press,Seat height=5; Back angle=3,12,100,10,120,10,120,8,140,6,160,,,,,,90,180,Pyramid up
+    Gym Full Body A,strength,Chest Press,Chest Press,Seat height=6,10,60,10,60,10,60,,,,,,,,,,60,,
+    Gym Full Body A,cardio,Treadmill,,,,,,,,,,,,,20,moderate,,,,,,Steady pace
+    Gym Full Body A,stretching,Hamstring Stretch,,,,,,,,,,,,,,,30,2,3,,,Keep back flat
+    Gym Full Body B,strength,Seated Row,Seated Row,Chest pad=5; Seat height=6,10,70,10,70,8,80,6,90,,,,,,,,75,120,
+    Gym Full Body B,cardio,Stationary Bike,,,,,,,,,,,,,15,low,,,,,,Cooldown spin
     """
 
     /// Validate the picked file is a CSV, then import its text.

@@ -198,6 +198,7 @@ struct SetBuilderSheet: View {
         def.numericValue = numeric
         def.otherText = other
         def.updatedAt = .now
+        if let machineId { CatalogSyncService(context).reconcileMachine(machineId) }
         try? context.save()
     }
 
@@ -210,6 +211,7 @@ struct SetBuilderSheet: View {
         def.machine = machine
         machine.settingDefinitions.append(def)
         context.insert(def)
+        CatalogSyncService(context).reconcileMachine(machine.id)
         try? context.save()
     }
 }

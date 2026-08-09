@@ -46,6 +46,7 @@ struct DemoDataManager {
 
         Audit.log(context, type: "demo.deleted", entity: "*",
                   summary: "Deleted \(deleted) demo top-level records", source: .user)
+        UserDefaults.standard.set(true, forKey: SeedDataService.userDeletedDemoKey)
         return deleted
     }
 

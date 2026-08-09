@@ -1,6 +1,6 @@
-# YMCA Workout Tracker
+# Workout Tracker
 
-A native, iPhone-only SwiftUI app for tracking YMCA machine-based workouts.
+A native, iPhone-only SwiftUI app for tracking gym machine-based workouts.
 Local-first, offline-only, SwiftData persistence. **No server, no iCloud sync**
 in this version. The number-one design priority is **data safety**: completed
 workout history is immutable and protected from accidental edits, deletion, and
@@ -12,7 +12,7 @@ destructive migrations.
 
 1. Open `WorkoutTracker.xcodeproj` in **Xcode 16 or newer**.
 2. Select an iPhone simulator (e.g. iPhone 15) and press **Run** (⌘R).
-3. On first launch the app seeds sample YMCA routines + a little history so you
+3. On first launch the app seeds sample gym routines + a little history so you
    can try it immediately.
 4. Run the tests with **⌘U**.
 

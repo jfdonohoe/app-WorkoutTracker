@@ -68,6 +68,11 @@ struct RoutineListView: View {
                 RoutineEditorView(routine: r, isCreating: true)
             }
         }
+        .onAppear {
+            let sync = CatalogSyncService(context)
+            for routine in routines { sync.reconcileRoutine(routine) }
+            try? context.save()
+        }
     }
 
     /// Create a new (unnamed) routine and open the creation editor with

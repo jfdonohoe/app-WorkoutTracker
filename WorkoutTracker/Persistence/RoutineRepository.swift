@@ -326,6 +326,34 @@ struct RoutineRepository {
         exercise.updatedAt = .now
     }
 
+    /// Remove every RoutineExercise referencing `exerciseId` from every
+    /// non-deleted routine's active version — forking a new version first if
+    /// the active version is already referenced by a recorded session, same as
+    /// any other structural routine edit (see RoutineEditorView.ensureEditable-
+    /// Version). Future and current scheduled workouts read a routine's active
+    /// version live (see CalendarView / WorkoutRepository.startWorkout), so this
+    /// alone clears the exercise from every one of them; only already-started
+    /// sessions need separate handling (WorkoutRepository.removeExerciseFrom-
+    /// ActiveSessions). Called when an exercise is deleted from the library.
+    func removeExerciseFromAllRoutines(exerciseId: UUID) {
+        let descriptor = FetchDescriptor<RoutineExercise>(predicate: #Predicate { $0.exerciseId == exerciseId })
+        guard let matches = try? context.fetch(descriptor) else { return }
+        var affected: [UUID: Routine] = [:]
+        for re in matches {
+            guard let version = re.section?.version, version.isActive,
+                  let routine = version.routine, routine.deletedAt == nil else { continue }
+            affected[routine.id] = routine
+        }
+        for routine in affected.values {
+            editRoutine(routine, note: "Exercise removed from library") { version in
+                for section in version.sections {
+                    let toRemove = section.exercises.filter { $0.exerciseId == exerciseId }
+                    for ex in toRemove { context.delete(ex) }
+                }
+            }
+        }
+    }
+
     func softDelete(_ machine: Machine) {
         machine.deletedAt = .now
         machine.updatedAt = .now

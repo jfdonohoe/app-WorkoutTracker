@@ -74,6 +74,10 @@ struct SessionEditorView: View {
             }
             .navigationTitle("Edit Workout")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                CatalogSyncService(context).reconcileSession(session)
+                try? context.save()
+            }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
                 ToolbarItem(placement: .topBarLeading) { EditButton() }
@@ -105,7 +109,23 @@ struct SessionEditorView: View {
                                 defaultRest: session.restBetweenSets,
                                 initialSets: ex.orderedSets.map { ($0.plannedReps, $0.plannedWeight) },
                                 initialRest: ex.plannedRestBetweenSets) { sets, rest in
-                    repo.setSessionPlannedSets(ex, sets: sets, restBetweenSets: rest, in: session)
+                    // Sets/reps/weight/rest are exercise SETTINGS — write through
+                    // to the catalog Exercise (single source of truth) and
+                    // reconcile, rather than editing this session's snapshot
+                    // directly. Falls back to a session-local edit for an
+                    // ad hoc exercise with no catalog link.
+                    if let exerciseId = ex.exerciseId {
+                        RoutineRepository(context).updateExerciseDefaults(exerciseId: exerciseId, sets: sets)
+                        if let def = try? context.fetch(
+                            FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == exerciseId })
+                        ).first {
+                            def.defaultRest = rest
+                            def.updatedAt = .now
+                        }
+                        CatalogSyncService(context).reconcileExercise(exerciseId)
+                    } else {
+                        repo.setSessionPlannedSets(ex, sets: sets, restBetweenSets: rest, in: session)
+                    }
                     try? context.save()
                 }
             }

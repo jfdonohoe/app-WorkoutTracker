@@ -43,16 +43,6 @@ struct SessionExerciseSheet: View {
     @State private var draftReps: [UUID: Int] = [:]
     @State private var editingSetting: SessionMachineSetting?
     @State private var showAddSetting = false
-    @State private var didEdit = false
-    @State private var showUpdatePrompt = false
-    // Snapshot of the cardio/stretching values when the sheet opened, so an
-    // adjustment can be detected on Mark Complete (strength uses planned vs actual).
-    @State private var capturedOriginals = false
-    @State private var origDuration = 0
-    @State private var origIntensityRaw = ""
-    @State private var origHold = 0
-    @State private var origSides = 1
-    @State private var origRounds = 1
     @State private var definition: Exercise?
     @State private var photoItem: PhotosPickerItem?
     @State private var showCamera = false
@@ -127,13 +117,11 @@ struct SessionExerciseSheet: View {
                     try? context.save()
                 }
             }
-            .onAppear { syncDrafts(); loadDefinition(); captureOriginals() }
-            .confirmationDialog(promptTitle,
-                                isPresented: $showUpdatePrompt, titleVisibility: .visible) {
-                Button("This workout only") { finishAfterPrompt() }
-                Button("Save as future default") { applyFutureDefault(); finishAfterPrompt() }
-            } message: {
-                Text(promptMessage)
+            .onAppear {
+                syncDrafts(); loadDefinition()
+                repo.recordExerciseStarted(exercise, in: session)
+                CatalogSyncService(context).reconcileSession(session)
+                try? context.save()
             }
         }
     }
@@ -173,7 +161,7 @@ struct SessionExerciseSheet: View {
                 Stepper("Rounds: \(exercise.rounds)", value: intBinding(\.rounds), in: 1...20)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Notes").font(.caption).foregroundStyle(.secondary)
-                    TextField("Notes", text: exerciseNotesBinding, axis: .vertical)
+                    TextField("Notes", text: notesBinding, axis: .vertical)
                 }
             }
             completeControl
@@ -186,10 +174,24 @@ struct SessionExerciseSheet: View {
         if isLocked {
             Label(exercise.isFullyCompleted ? "Completed" : "Not completed",
                   systemImage: exercise.isFullyCompleted ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(exercise.isFullyCompleted ? .green : .secondary)
+                .foregroundStyle(exercise.isFullyCompleted ? Theme.statusGreen : .secondary)
+        } else if restTimer.isRunning && !exercise.isFullyCompleted {
+            // Between-exercises cooldown, same slot/shape as the strength
+            // complete button — tap to skip the rest.
+            VStack(spacing: 4) {
+                Button { skipRest() } label: {
+                    RestCountdownButton(title: "Rest \(restTimer.formattedRemaining)",
+                                        endDate: restTimer.endInstant,
+                                        totalSeconds: restTimer.totalSeconds,
+                                        isRunning: restTimer.isRunning,
+                                        isFinished: restTimer.isFinished)
+                }
+                .buttonStyle(.plain)
+                Text("Tap to skip rest").font(.caption2).foregroundStyle(.secondary)
+            }
         } else if exercise.isFullyCompleted {
             HStack {
-                Label("Completed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                Label("Completed", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.statusGreen)
                 Spacer()
                 Button(role: .destructive) {
                     repo.unmarkExerciseComplete(exercise, in: session); try? context.save()
@@ -200,7 +202,8 @@ struct SessionExerciseSheet: View {
             // Same presentation as the strength Complete Set button: a full-width
             // button as its own row with the standard section gutters/spacing.
             Button { markComplete() } label: {
-                SetActionButtonLabel(title: completeActionTitle, systemImage: "checkmark.circle.fill")
+                SetActionButtonLabel(title: completeActionTitle, systemImage: "checkmark.circle.fill",
+                                     tint: Theme.completeExerciseButton)
             }
             .buttonStyle(.plain)
         }
@@ -210,52 +213,46 @@ struct SessionExerciseSheet: View {
         HStack { Text(label); Spacer(); Text(value).foregroundStyle(.secondary) }
     }
 
-    /// Save-on-change binding to an Int field of the session exercise.
+    /// Save-on-change binding to an Int field of the session exercise. Also
+    /// writes through to the exercise's catalog definition (single source of
+    /// truth) and reconciles every other routine/in-progress session that
+    /// references it.
     private func intBinding(_ keyPath: ReferenceWritableKeyPath<WorkoutSessionExercise, Int>) -> Binding<Int> {
         Binding(get: { exercise[keyPath: keyPath] },
-                set: { exercise[keyPath: keyPath] = $0; try? context.save() })
+                set: { exercise[keyPath: keyPath] = $0; syncCardioStretchToCatalog(); try? context.save() })
     }
     private var intensityBinding: Binding<CardioIntensity> {
         Binding(get: { exercise.intensity ?? .moderate },
-                set: { exercise.intensity = $0; try? context.save() })
-    }
-    private var exerciseNotesBinding: Binding<String> {
-        Binding(get: { exercise.notes },
-                set: { exercise.notes = $0; try? context.save() })
+                set: { exercise.intensity = $0; syncCardioStretchToCatalog(); try? context.save() })
     }
 
     private func markComplete() {
         repo.markExerciseComplete(exercise, in: session)
         try? context.save()
-        // If the user adjusted this cardio/stretching exercise and it has a library
-        // definition to update, ask whether to save the change as the future default.
-        if cardioStretchEdited && exercise.exerciseId != nil {
-            showUpdatePrompt = true
-        } else {
-            completeAndProceed()
-        }
+        completeAndProceed()
     }
 
-    private func captureOriginals() {
-        guard !capturedOriginals else { return }
-        capturedOriginals = true
-        origDuration = exercise.durationMinutes
-        origIntensityRaw = exercise.intensityRaw
-        origHold = exercise.holdSeconds
-        origSides = exercise.sides
-        origRounds = exercise.rounds
-    }
-
-    /// Whether the cardio/stretching values changed since the sheet opened.
-    private var cardioStretchEdited: Bool {
+    /// Push the current cardio/stretching values through to the exercise's
+    /// catalog definition, then reconcile every routine/in-progress session
+    /// that references it.
+    private func syncCardioStretchToCatalog() {
+        guard let exId = exercise.exerciseId,
+              let def = try? context.fetch(
+                FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == exId })
+              ).first else { return }
         switch exercise.sectionType {
         case .cardio:
-            return exercise.durationMinutes != origDuration || exercise.intensityRaw != origIntensityRaw
+            def.durationMinutes = exercise.durationMinutes
+            if let i = exercise.intensity { def.intensity = i }
         case .stretching:
-            return exercise.holdSeconds != origHold || exercise.sides != origSides || exercise.rounds != origRounds
+            def.holdSeconds = exercise.holdSeconds
+            def.sides = exercise.sides
+            def.rounds = exercise.rounds
         case .strength:
-            return false
+            return
         }
+        def.updatedAt = .now
+        CatalogSyncService(context).reconcileExercise(exId)
     }
 
     // MARK: - Exercise definition (note + photo)
@@ -341,6 +338,14 @@ struct SessionExerciseSheet: View {
                             }
                         }
                         .tint(.primary)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                repo.deleteSetting(setting, from: exercise)
+                                try? context.save()
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                     } else {
                         HStack {
                             Text(setting.label)
@@ -384,7 +389,7 @@ struct SessionExerciseSheet: View {
             withAnimation { expandedCompletedSetId = set.id }
         } label: {
             HStack {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.statusGreen)
                 Text("Set \(set.index + 1)")
                 Spacer()
                 Text("\(Int(set.actualWeight ?? set.plannedWeight)) lb × \(set.actualReps ?? set.plannedReps)")
@@ -424,15 +429,12 @@ struct SessionExerciseSheet: View {
                 Text("Set \(set.index + 1)").font(.headline)
                 Spacer()
                 Label("Completed", systemImage: "checkmark.circle.fill")
-                    .font(.caption).foregroundStyle(.green)
+                    .font(.caption).foregroundStyle(Theme.statusGreen)
             }
             stepperRow("Weight (lb)", value: bindingWeight(set), step: 5, range: 0...2000)
             stepperRow("Reps", value: bindingRepsAsDouble(set), step: 1, range: 0...100)
             HStack {
-                Button("Save") {
-                    repo.editActual(set, in: session,
-                                    weight: draftWeight[set.id], reps: draftReps[set.id])
-                    try? context.save()
+                Button("Done") {
                     withAnimation { expandedCompletedSetId = nil }
                 }
                 .buttonStyle(.borderedProminent)
@@ -478,7 +480,8 @@ struct SessionExerciseSheet: View {
                 complete(set, proxy: proxy)
             } label: {
                 SetActionButtonLabel(title: finishesExercise ? completeActionTitle : "Complete Set",
-                                     systemImage: "checkmark.circle.fill")
+                                     systemImage: "checkmark.circle.fill",
+                                     tint: finishesExercise ? Theme.completeExerciseButton : Theme.completeSetButton)
             }
             .buttonStyle(.plain)
         }
@@ -500,13 +503,31 @@ struct SessionExerciseSheet: View {
         }
     }
 
+    /// Weight binding shared by the active-set editor (drafts only, applied on
+    /// Complete Set) and the reopened-completed-set editor (already recorded —
+    /// changes save immediately, no separate Save step).
     private func bindingWeight(_ set: WorkoutSessionSet) -> Binding<Double> {
         Binding(get: { draftWeight[set.id] ?? set.actualWeight ?? set.plannedWeight },
-                set: { draftWeight[set.id] = $0 })
+                set: { newValue in
+                    draftWeight[set.id] = newValue
+                    if set.isCompleted {
+                        repo.editActual(set, in: session, weight: newValue)
+                        syncStrengthEditsToCatalog()
+                        try? context.save()
+                    }
+                })
     }
     private func bindingRepsAsDouble(_ set: WorkoutSessionSet) -> Binding<Double> {
         Binding(get: { Double(draftReps[set.id] ?? set.actualReps ?? set.plannedReps) },
-                set: { draftReps[set.id] = Int($0) })
+                set: { newValue in
+                    let reps = Int(newValue)
+                    draftReps[set.id] = reps
+                    if set.isCompleted {
+                        repo.editActual(set, in: session, reps: reps)
+                        syncStrengthEditsToCatalog()
+                        try? context.save()
+                    }
+                })
     }
 
     // MARK: - Actions
@@ -521,7 +542,6 @@ struct SessionExerciseSheet: View {
     private func complete(_ set: WorkoutSessionSet, proxy: ScrollViewProxy) {
         let w = draftWeight[set.id] ?? set.plannedWeight
         let r = draftReps[set.id] ?? set.plannedReps
-        if w != set.plannedWeight || r != set.plannedReps { didEdit = true }
         repo.completeSet(set, in: session, actualWeight: w, actualReps: r)
         try? context.save()
 
@@ -531,15 +551,10 @@ struct SessionExerciseSheet: View {
                             upcoming: "Next: \(Int(next.plannedWeight)) lb × \(next.plannedReps)")
             withAnimation { proxy.scrollTo(next.id, anchor: .center) }
         } else {
-            // Exercise finished. If the user made edits and this exercise came
-            // from a routine, offer to bake the changes into the routine + the
-            // exercise definition; otherwise just close.
-            let fromRoutine = session.routineId != nil && exercise.sourceRoutineExerciseId != nil
-            if didEdit && fromRoutine {
-                showUpdatePrompt = true
-            } else {
-                completeAndProceed()
-            }
+            // Exercise finished — bake the performed values into the catalog
+            // exercise's defaults (single source of truth) and reconcile.
+            syncStrengthEditsToCatalog()
+            completeAndProceed()
         }
     }
 
@@ -576,77 +591,30 @@ struct SessionExerciseSheet: View {
     /// it was the last — return to the workout screen and start the cooldown.
     private func completeAndProceed() {
         if let next = nextInGroup() {
-            restTimer.stop()
+            // Between-exercises cooldown, same as when a whole group finishes —
+            // it now shows in the SAME slot as the between-sets rest, on the
+            // first set of the exercise we're advancing to.
+            if session.restBetweenExercises > 0 {
+                restTimer.start(seconds: session.restBetweenExercises, upcoming: "Next: \(next.name)")
+            } else {
+                restTimer.stop()
+            }
             onAdvance(next)
         } else {
             finishExercise()
         }
     }
 
-    // MARK: - "This workout vs. future default" prompt (all groups)
-
-    private var promptTitle: String {
-        exercise.hasSets ? "Apply the new reps/weights to…" : "Apply the new values to…"
-    }
-    private var promptMessage: String {
-        exercise.hasSets
-            ? "You changed reps or weight. Save them as the routine's future default, or keep them just for this workout?"
-            : "You changed this exercise's values. Save them as the exercise's future default, or keep them just for this workout?"
-    }
-
-    /// Save the performed values as the future default (strength → routine +
-    /// exercise; cardio/stretching → the exercise definition).
-    private func applyFutureDefault() {
-        if exercise.hasSets { applyEditsToRoutineAndExercise() }
-        else { applyCardioStretchDefault() }
-    }
-
-    /// Finish after the future-default prompt: advance to the next exercise in the
-    /// group, or return to the workout screen if this was the last.
-    private func finishAfterPrompt() {
-        completeAndProceed()
-    }
-
-    /// Bake the adjusted cardio/stretching values into the library exercise so
-    /// future workouts use them by default.
-    private func applyCardioStretchDefault() {
-        guard let exId = exercise.exerciseId,
-              let def = try? context.fetch(
-                FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == exId })
-              ).first else { return }
-        switch exercise.sectionType {
-        case .cardio:
-            def.durationMinutes = exercise.durationMinutes
-            if let i = exercise.intensity { def.intensity = i }
-        case .stretching:
-            def.holdSeconds = exercise.holdSeconds
-            def.sides = exercise.sides
-            def.rounds = exercise.rounds
-        case .strength:
-            break
-        }
-        def.updatedAt = .now
-        try? context.save()
-    }
-
-    /// Bake the performed values into the routine (new version) and the library
-    /// exercise's defaults.
-    private func applyEditsToRoutineAndExercise() {
+    /// Push this exercise's current sets (actual where recorded, else planned)
+    /// through to the catalog Exercise as its new default prescription, then
+    /// reconcile every routine/in-progress session that references it.
+    private func syncStrengthEditsToCatalog() {
+        guard exercise.hasSets, let exerciseId = exercise.exerciseId else { return }
         let sets = exercise.orderedSets.map {
             (reps: $0.actualReps ?? $0.plannedReps, weight: $0.actualWeight ?? $0.plannedWeight)
         }
-        let routineRepo = RoutineRepository(context)
-        if let routineId = session.routineId,
-           let srcId = exercise.sourceRoutineExerciseId,
-           let routine = try? context.fetch(FetchDescriptor<Routine>(predicate: #Predicate { $0.id == routineId })).first {
-            routineRepo.updateFutureDefault(routine: routine, sourceRoutineExerciseId: srcId) { re in
-                routineRepo.setPlannedSets(re, sets: sets, restBetweenSets: re.restBetweenSets)
-            }
-        }
-        if let exerciseId = exercise.exerciseId {
-            routineRepo.updateExerciseDefaults(exerciseId: exerciseId, sets: sets)
-        }
-        try? context.save()
+        RoutineRepository(context).updateExerciseDefaults(exerciseId: exerciseId, sets: sets)
+        CatalogSyncService(context).reconcileExercise(exerciseId)
     }
 
     /// Skip the remaining rest: stop the timer so the Complete Set button shows.
@@ -655,12 +623,15 @@ struct SessionExerciseSheet: View {
     }
 
     /// Machine settings always save to the shared machine definition (everywhere)
-    /// as well as this workout's snapshot — no per-workout choice, and this does
-    /// NOT trigger the routine-update prompt (that's only for reps/weight).
+    /// as well as this workout's snapshot, and reconcile every OTHER in-progress
+    /// session sharing the same machine.
     private func apply(setting: SessionMachineSetting, numeric: Int?, other: String?) {
         repo.updateSessionSetting(setting, numericValue: numeric, otherText: other)
         if let defId = setting.definitionId {
             repo.saveSettingAsFutureDefault(definitionId: defId, numericValue: numeric, otherText: other)
+            if let machineId = exercise.machineId {
+                CatalogSyncService(context).reconcileMachine(machineId)
+            }
         }
         try? context.save()
     }
@@ -674,6 +645,9 @@ struct SetActionButtonLabel: View {
     var title: String
     var systemImage: String? = nil
     var tint: Color = .accentColor
+    /// Label color — defaults to white for dark fills; pass `.black` for pale
+    /// fills like `Theme.completeSetButton` so the text stays legible.
+    var foreground: Color = .white
 
     private let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
 
@@ -681,7 +655,7 @@ struct SetActionButtonLabel: View {
         ZStack {
             shape.fill(tint)
             BigActionLabel(title: title, systemImage: systemImage)
-                .foregroundStyle(.white)
+                .foregroundStyle(foreground)
         }
         .frame(maxWidth: .infinity, minHeight: 50)
         .clipShape(shape)

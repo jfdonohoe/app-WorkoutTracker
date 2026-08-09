@@ -273,14 +273,15 @@ struct MachineSettingEditSheet: View {
             }
             .navigationTitle("Edit Setting")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        onSave(useOther ? nil : numeric, useOther ? other : nil)
-                        dismiss()
-                    }
-                }
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
+            .onChange(of: useOther) { _, _ in save() }
+            .onChange(of: numeric) { _, _ in save() }
+            .onChange(of: other) { _, _ in save() }
         }
+    }
+
+    private func save() {
+        onSave(useOther ? nil : numeric, useOther ? other : nil)
     }
 }

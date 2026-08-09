@@ -81,20 +81,25 @@ struct WorkoutRepository {
                                   sectionType: SectionType,
                                   order: Int,
                                   groupIndex: Int = 0) -> WorkoutSessionExercise {
+        // RoutineExercise is kept as a reconciled mirror of the catalog Exercise
+        // (CatalogSyncService) — read the live definition directly here too, as
+        // defense-in-depth in case reconciliation hasn't run since the last edit.
+        let def = fetchExercise(re.exerciseId)
+
         let se = WorkoutSessionExercise(sourceRoutineExerciseId: re.id,
                                         exerciseId: re.exerciseId,
                                         machineId: re.machineId,
-                                        name: re.displayName,
+                                        name: def?.name ?? re.displayName,
                                         sectionType: sectionType,
                                         order: order,
-                                        plannedRestBetweenSets: re.restBetweenSets,
-                                        notes: re.notes)
+                                        plannedRestBetweenSets: def?.defaultRest ?? re.restBetweenSets,
+                                        notes: def?.notes ?? re.notes)
         se.groupIndex = groupIndex
         context.insert(se)
 
         // Snapshot the group-specific prescription from the exercise definition
         // (cardio: duration/intensity; stretching: hold/sides/rounds).
-        if let def = fetchExercise(re.exerciseId) {
+        if let def {
             switch sectionType {
             case .cardio:
                 se.durationMinutes = def.durationMinutes
@@ -108,8 +113,15 @@ struct WorkoutRepository {
             }
         }
 
-        // Snapshot planned sets — per-set values when defined, else synthesized.
-        for (i, planned) in re.effectivePlannedSets.enumerated() {
+        // Snapshot planned sets — from the catalog definition when available,
+        // else the routine's own (reconciled) mirror.
+        let plannedSets: [(reps: Int, weight: Double)]
+        if let def, !def.effectiveDefaultSets.isEmpty {
+            plannedSets = def.effectiveDefaultSets
+        } else {
+            plannedSets = re.effectivePlannedSets
+        }
+        for (i, planned) in plannedSets.enumerated() {
             let set = WorkoutSessionSet(index: i,
                                         plannedWeight: planned.weight,
                                         plannedReps: planned.reps)
@@ -144,6 +156,25 @@ struct WorkoutRepository {
         return try? context.fetch(d).first
     }
 
+    // MARK: - Exercise start/end timecodes (for the summary)
+
+    /// Record when the user first opened this exercise (idempotent — only sets
+    /// it once). Called when the logging sheet appears.
+    func recordExerciseStarted(_ exercise: WorkoutSessionExercise, in session: WorkoutSession, now: Date = .now) {
+        guard !session.isLocked, exercise.startedAt == nil else { return }
+        exercise.startedAt = now
+    }
+
+    /// Stamp `endedAt` the moment an exercise becomes fully completed, and
+    /// clear it if a completion is undone.
+    private func syncExerciseEndTimecode(_ exercise: WorkoutSessionExercise, now: Date) {
+        if exercise.isFullyCompleted {
+            if exercise.endedAt == nil { exercise.endedAt = now }
+        } else {
+            exercise.endedAt = nil
+        }
+    }
+
     // MARK: - Non-set completion (cardio / stretching)
 
     /// Mark a cardio/stretching exercise complete (it has no sets to tick off).
@@ -151,6 +182,7 @@ struct WorkoutRepository {
         guard !session.isLocked else { return }
         exercise.markedCompleteAt = now
         session.updatedAt = now
+        syncExerciseEndTimecode(exercise, now: now)
         recomputeStatus(session)
     }
 
@@ -158,6 +190,7 @@ struct WorkoutRepository {
         guard !session.isLocked else { return }
         exercise.markedCompleteAt = nil
         session.updatedAt = .now
+        syncExerciseEndTimecode(exercise, now: .now)
         recomputeStatus(session)
     }
 
@@ -183,6 +216,7 @@ struct WorkoutRepository {
         set.isCompleted = true
         set.completedAt = now
         session.updatedAt = now
+        if let exercise = set.exercise { syncExerciseEndTimecode(exercise, now: now) }
         recomputeStatus(session)
     }
 
@@ -191,6 +225,7 @@ struct WorkoutRepository {
         set.isCompleted = false
         set.completedAt = nil
         session.updatedAt = .now
+        if let exercise = set.exercise { syncExerciseEndTimecode(exercise, now: .now) }
         recomputeStatus(session)
     }
 
@@ -438,8 +473,54 @@ struct WorkoutRepository {
         }
     }
 
+    /// Delete a machine setting. If it's linked to a shared machine definition,
+    /// soft-delete the definition (settings are shared everywhere, same as
+    /// editing one — see `apply` in SessionExerciseSheet) and reconcile every
+    /// other in-progress session on the same machine, which also removes this
+    /// snapshot. Ad hoc settings (added mid-workout without "also add to
+    /// machine") have no shared definition and are simply removed here.
+    func deleteSetting(_ setting: SessionMachineSetting, from exercise: WorkoutSessionExercise) {
+        if let defId = setting.definitionId,
+           let def = try? context.fetch(
+             FetchDescriptor<MachineSettingDefinition>(predicate: #Predicate { $0.id == defId })
+           ).first {
+            def.deletedAt = .now
+            def.updatedAt = .now
+            if let machineId = exercise.machineId {
+                CatalogSyncService(context).reconcileMachine(machineId)
+            }
+        } else {
+            context.delete(setting)
+        }
+    }
+
+    // MARK: - Catalog exercise deletion cascade
+
+    /// Remove every session exercise referencing `exerciseId` from every
+    /// not-yet-locked ("current") workout session. Locked (finished) history is
+    /// never touched. Called when an exercise is deleted from the library.
+    func removeExerciseFromActiveSessions(exerciseId: UUID) {
+        let eid: UUID? = exerciseId
+        let descriptor = FetchDescriptor<WorkoutSessionExercise>(predicate: #Predicate { $0.exerciseId == eid })
+        guard let matches = try? context.fetch(descriptor) else { return }
+        var touchedIds = Set<UUID>()
+        var sessions: [WorkoutSession] = []
+        for se in matches {
+            guard let session = se.session, !session.isLocked else { continue }
+            if touchedIds.insert(session.id).inserted { sessions.append(session) }
+            context.delete(se)
+        }
+        for session in sessions {
+            session.updatedAt = .now
+            recomputeStatus(session)
+        }
+    }
+
     /// Add a brand-new machine setting that wasn't originally defined, applied to
-    /// the current session exercise (snapshot). Optionally also add to machine.
+    /// the current session exercise (snapshot). Optionally also add to machine —
+    /// in that case, reconciling pulls the new definition into THIS exercise
+    /// (and every other in-progress session on the same machine) rather than
+    /// inserting a second, separately-tracked copy for this exercise.
     @discardableResult
     func addSessionSetting(to exercise: WorkoutSessionExercise,
                            label: String,
@@ -447,7 +528,6 @@ struct WorkoutRepository {
                            otherText: String?,
                            alsoAddToMachine: Bool) -> SessionMachineSetting {
         let order = (exercise.machineSettings.map(\.order).max() ?? -1) + 1
-        var defId: UUID? = nil
         if alsoAddToMachine, let machineId = exercise.machineId, let machine = fetchMachine(machineId),
            machine.activeSettings.count < 4 {
             let def = MachineSettingDefinition(label: label, order: order,
@@ -456,9 +536,12 @@ struct WorkoutRepository {
             def.machine = machine
             machine.settingDefinitions.append(def)
             context.insert(def)
-            defId = def.id
+            CatalogSyncService(context).reconcileMachine(machineId)
+            if let snap = exercise.machineSettings.first(where: { $0.definitionId == def.id }) {
+                return snap
+            }
         }
-        let snap = SessionMachineSetting(definitionId: defId, label: label, order: order,
+        let snap = SessionMachineSetting(definitionId: nil, label: label, order: order,
                                          numericValue: numericValue, otherText: otherText)
         snap.exercise = exercise
         exercise.machineSettings.append(snap)

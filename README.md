@@ -1,140 +1,265 @@
 # Workout Tracker
 
-A native, iPhone-only SwiftUI app for tracking gym machine-based workouts.
-Local-first, offline-only, SwiftData persistence. **No server, no iCloud sync**
-in this version. The number-one design priority is **data safety**: completed
-workout history is immutable and protected from accidental edits, deletion, and
-destructive migrations.
+A native iOS workout tracker designed around a simple principle:
+
+> **What you did in the past should remain trustworthy, even when your plans change.**
+
+Workout Tracker is a working product experiment exploring how interaction design, data modeling, and system behavior can reinforce that principle.
+
+Built with SwiftUI and SwiftData.
 
 ---
 
-## Open & run
+## The product problem
 
-1. Open `WorkoutTracker.xcodeproj` in **Xcode 16 or newer**.
-2. Select an iPhone simulator (e.g. iPhone 15) and press **Run** (⌘R).
-3. On first launch the app seeds sample gym routines + a little history so you
-   can try it immediately.
-4. Run the tests with **⌘U**.
+Workout applications deal with two very different kinds of information:
 
-The project uses Xcode 16 **file-system synchronized groups**, so every `.swift`
-file under `WorkoutTracker/` and `WorkoutTrackerTests/` is compiled
-automatically — just add files to the folders, no manual project edits.
+**Plans** should be flexible.  
+You should be able to change exercises, weights, schedules, and routines whenever you want.
 
-> Fallback: if the `.xcodeproj` ever won't open on your machine, a `project.yml`
-> is included. Run `brew install xcodegen && xcodegen generate` to regenerate it.
+**History** should be stable.  
+Changing tomorrow's routine should not silently change the record of what you did three months ago.
 
-Targets: iPhone only · iOS 17+ · pounds only · exact reps only.
+That distinction became the foundation for the product.
+
+Rather than treating workouts as editable records in a single database, Workout Tracker separates future intent from completed activity and makes that distinction visible throughout the experience.
 
 ---
 
-## Development reset vs. production safety
+## Design principles
 
-Data protection is split by the `DEBUG` compile flag — on when you build from
-Xcode, compiled out of Release/App Store builds — so iteration is fast in dev
-while production history stays untouchable:
+### History is a record, not a template
 
-| | Debug (Xcode) | Release (production) |
-|---|---|---|
-| Store fails to open after a model change | wipes the disposable dev store and retries automatically | **never deletes** — fails loudly so the user can back up first |
-| Force a clean store | add `--reset-store` to the scheme's Run ▸ Arguments | not available |
-| In-app full wipe | **Data ▸ Demo Data ▸ "DEV: Erase ALL data & reseed"** | button is compiled out |
+Completed workouts are immutable.
 
-So during development you rarely need to hand-delete the app: change the model,
-re-run, and the old store is rebuilt for you. The three production guarantees
-(`makeLive()` never auto-deletes, no force `--reset-store`, no in-app wipe) are
-all behind `#if DEBUG` / `#else` and cannot be reached in a shipped build.
+If a routine changes later, previously completed sessions continue to reflect exactly what was planned and recorded at the time.
 
-> Want to keep dev data across schema changes instead of wiping? Add a real
-> migration stage in `WorkoutMigrationPlan` — the debug auto-wipe only triggers
-> when the store is genuinely incompatible.
+### Changes affect the future
+
+Editing a routine creates a new version rather than modifying the version associated with past workouts.
+
+This lets the product remain flexible without sacrificing historical accuracy.
+
+### Corrections preserve what happened
+
+Mistakes can be corrected, but corrections are append-only.
+
+The original value remains part of the record rather than being silently overwritten.
+
+### Destructive actions should be difficult
+
+Workout history is intentionally protected from accidental deletion, destructive migrations, and routine edits that could rewrite past activity.
+
+### The interface should stay out of the workout
+
+During an active workout, interaction needs to be fast and low-friction.
+
+The product emphasizes the next meaningful action, keeps frequently changed values close at hand, and reduces navigation while a workout is underway.
 
 ---
 
-## Architecture
+## Core experience
 
-Clean separation of concerns:
+The MVP covers the full lifecycle of a workout:
 
+### Plan
+
+Create reusable routines containing exercises, machine settings, weights, repetitions, and scheduling information.
+
+### Start
+
+When a workout is scheduled for today, the app opens directly into that workout rather than requiring the user to find it.
+
+### Perform
+
+Move through exercises and sets with the current task, target values, and next action kept prominent.
+
+A rest timer becomes part of the completion interaction rather than a separate mode that must be managed independently.
+
+### Complete
+
+Finishing a workout creates a historical snapshot.
+
+From that point forward, changes to the underlying routine do not alter the completed session.
+
+### Review
+
+Calendar and history views make it possible to revisit past activity while maintaining a clear distinction between recorded history and future plans.
+
+---
+
+## A product decision that shaped the architecture
+
+One of the more interesting parts of this project is that a UX principle required a corresponding system model.
+
+A conventional approach might let a completed workout continue referencing the current version of a routine:
+
+```text
+Routine
+   ↓
+Workout history
 ```
-WorkoutTracker/
-  App/           App entry point
-  Models/        SwiftData @Model entities + enums
-  Persistence/   Versioned schema, migration plan, container, repositories
-  Services/      Rest timer, notifications, seed, export/import, integrity, schedule
-  Views/         The 11 MVP screens + reusable components
-WorkoutTrackerTests/   17 data-safety tests
+
+That creates a subtle problem.
+
+If the routine changes, the meaning of the historical record can change with it.
+
+Workout Tracker instead uses versioned routine snapshots:
+
+```text
+Routine
+   ↓
+Routine Version A ─────→ Completed Workout A
+   ↓
+Routine Version B ─────→ Future Workout
 ```
 
-- **Models** — pure SwiftData entities with stable `UUID` ids, `createdAt` /
-  `updatedAt` / `deletedAt`, and a `source` marker (`user` / `seedDemo`).
-- **Repositories** (`RoutineRepository`, `WorkoutRepository`,
-  `CorrectionService`, `DemoDataManager`) — the *only* place that mutates data,
-  so the safety rules live in one auditable layer.
-- **Services** — `RestTimerService` (lock-safe countdown + local notification),
-  `SeedDataService`, `ExportImportService`, `DataIntegrityService`,
-  `ScheduleService` (RRULE expansion).
-- **Views** — SwiftUI screens; they read via `@Query` and write only through the
-  repositories.
+Editing a routine creates a new version.
+
+Past workouts continue referencing the version that existed when they were performed.
+
+The implementation is more complex, but the user's mental model becomes simpler:
+
+**The past stays the past.**
 
 ---
 
-## How the data-safety rules are enforced
+## Protecting trust in the data
 
-| Principle | Where |
+Several behaviors reinforce that principle.
+
+| Product principle | System behavior |
 |---|---|
-| 1. Completed sessions are immutable | `WorkoutSession.lockedAt`; repositories refuse direct mutation of locked sessions |
-| 2. Past sessions never overwritten on routine change | Sessions store an independent **snapshot** of all planned values + machine settings; they reference a `RoutineVersion` by id |
-| 3. Future-affecting edits create a new version | `RoutineRepository.makeNewVersion` / `updateFutureDefault` deep-clone into a new `RoutineVersion`; old versions stay |
-| 4. Soft deletes | `deletedAt` on routines, exercises, machines, schedules; never hard-deleted from the UI |
-| 5. Corrections are append-only | `WorkoutCorrectionEvent` records; originals preserved, corrected view computed by `CorrectedView` |
-| 6/7. Demo data separated & one-click deletable | `source == .seedDemo` is set once and never flipped; `DemoDataManager` removes all demo-origin data, even edited demo records |
-| 8. No destructive migrations | `WorkoutSchemaV1` + `WorkoutMigrationPlan` force explicit, reviewable, additive-first migrations; container refuses to auto-delete the store |
+| Completed sessions should not change | Completed sessions are locked |
+| Routine edits should affect the future | Edits create new routine versions |
+| History should reflect what was planned then | Sessions retain independent snapshots |
+| Corrections should be transparent | Corrections are append-only |
+| Removing something should not destroy history | User-facing deletion is soft deletion |
+| App upgrades should not erase activity | Persistence uses explicit versioned migrations |
+| Demo content should never contaminate real history | Demo-origin data remains identifiable |
 
-### Versioning model (do not simplify)
+The point is not simply data integrity.
 
-A `Routine` is a stable identity + name. Its content lives in immutable
-`RoutineVersion` snapshots. Editing a routine that any recorded session
-references **forks a new version**; past sessions keep pointing at their original
-version. This is the heart of "past workouts stay historically accurate."
+It is **product trust**.
 
-### Migration safety
-
-`Persistence/Schema.swift` pins a `VersionedSchema` (v1.0.0) and a
-`SchemaMigrationPlan` from day one. When you add `WorkoutSchemaV2` later:
-
-- Prefer **additive** changes (new optional properties) → lightweight stage.
-- Never delete `WorkoutSession` / `WorkoutSessionExercise` /
-  `WorkoutSessionSet`, and never overwrite their snapshot fields.
-- For any transform, use a `.custom` stage that backs up rows in `willMigrate`
-  and asserts session counts in `didMigrate`, and add a test in
-  `MigrationIntegrityTests`.
+A workout history becomes useful only if the user can believe that it still represents what actually happened.
 
 ---
 
-## Screens (MVP)
+## Interaction and visual system
 
-Today's Workout · Active Workout · Rest Timer · Routine List · Routine Editor ·
-Exercise/Machine Editor · Calendar · Workout History Detail · Import/Export ·
-Demo Data · Data Safety Check.
+The app uses a small design system built specifically around an active workout context.
 
-The app opens to **Today's Workout** when something is scheduled today, otherwise
-to the **Calendar**.
+The visual language favors:
 
----
+- strong hierarchy for the current exercise and set
+- large, reachable primary actions
+- restrained use of semantic color
+- warm neutral surfaces
+- persistent status without excessive chrome
+- tabular numbers where rapidly changing values need to remain visually stable
 
-## Tests (⌘U) — 17 data-safety guarantees
-
-`ImmutabilityAndVersioningTests` (1–12), `DemoExportImportTests` (13–16),
-`MigrationIntegrityTests` (17 + integrity). They prove, among other things, that
-completed history does not change when routines are edited, that future-default
-edits create new versions while past sessions keep the old one, that corrections
-never overwrite originals, that demo deletion removes only demo-origin data, and
-that import is non-destructive.
+The design system is documented separately in `DesignSystem.html`.
 
 ---
 
-## Intentionally deferred (designed-for, not built)
+## Rest as part of the interaction
 
-Advanced progression suggestions, advanced recurrence editing UI, monthly stats,
-machine groupings, multi-location UI, iCloud sync. The data model already
-supports RRULE recurrence, multiple gym locations, and append-only auditing so
-these can be added without breaking history.
+Rest timing is a good example of treating a feature as part of a workflow rather than a destination.
+
+Completing a set starts the rest period directly within the primary action.
+
+The button itself becomes a visual countdown, allowing the user to understand both:
+
+**what is happening now**  
+and  
+**when the next action becomes relevant**
+
+without navigating to a separate timer screen.
+
+This keeps attention on the workout rather than on operating the app.
+
+---
+
+## Product scope
+
+The current MVP includes:
+
+- Today's Workout
+- Active Workout
+- Rest Timer
+- Routine List
+- Routine Editor
+- Exercise and Machine Editor
+- Calendar
+- Workout History
+- Import / Export
+- Demo Data
+- Data Safety Check
+
+The app is intentionally local-first and offline-only.
+
+There is currently no account system, server, or iCloud dependency.
+
+---
+
+## Designed for extension
+
+Some capabilities were deliberately deferred rather than added to the initial product:
+
+- progression recommendations
+- richer recurrence editing
+- monthly statistics
+- machine groupings
+- multiple gym locations in the UI
+- cloud synchronization
+
+The underlying model anticipates several of these possibilities without requiring them to complicate the current experience.
+
+That distinction matters to me when prototyping:
+
+**design enough architecture to preserve future options, but do not expose future complexity to today's user.**
+
+---
+
+## Implementation
+
+Workout Tracker is a native iPhone application built with:
+
+- SwiftUI
+- SwiftData
+- versioned schemas and migrations
+- repository-based data mutation
+- local notifications
+- RRULE schedule expansion
+- local import / export
+
+The codebase separates product state, persistence, services, and presentation:
+
+```text
+WorkoutTracker/
+  App/
+  Models/
+  Persistence/
+  Services/
+  Views/
+
+WorkoutTrackerTests/
+```
+
+Views read product state but do not directly own persistence behavior. Rules such as historical immutability and versioning live in a centralized data layer so they can be tested independently of the UI.
+
+---
+
+## Testing the product rules
+
+The test suite focuses heavily on the behaviors that protect user trust.
+
+Tests verify that:
+
+- completed history remains unchanged when routines are edited
+- future changes create new routine versions
+- old sessions retain their original versions
+- corrections do not overwrite original values
+- deleting demo content does not remove user data
+-

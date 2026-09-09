@@ -4,7 +4,7 @@
 //
 //  Create/edit a library Exercise: name, group, the group's default
 //  prescription (strength = per-set reps/weight, cardio = duration/intensity,
-//  stretching = hold/sides/rounds), an optional machine + up to 4 shared
+//  stretching = hold/sides/rounds), an optional machine + its shared
 //  settings, a reference photo (any group), and notes.
 //
 //  WHY this is presented as a SHEET (see ExerciseLibraryView):
@@ -59,6 +59,10 @@ struct ExerciseEditorView: View {
     struct SetDraft: Identifiable, Equatable { let id = UUID(); var reps: Int; var weight: Double }
     struct SettingDraft: Identifiable, Equatable {
         let id = UUID()
+        /// The stored definition this draft was loaded from, if any. Kept so a
+        /// save UPDATES that definition instead of deleting and recreating it —
+        /// session snapshots reference definitions by id.
+        var definitionId: UUID? = nil
         var label = ""
         var useOther = false
         var numeric = 1
@@ -194,12 +198,12 @@ struct ExerciseEditorView: View {
             if isMachine { TextField("Machine name", text: $machineName) }
         }
         if isMachine {
-            Section("Machine settings (up to 4)") {
+            Section("Machine settings (up to \(Machine.maxSettings))") {
                 ForEach(Array(settings.enumerated()), id: \.element.id) { index, _ in
                     settingRow(index)
                 }
                 .onDelete { settings.remove(atOffsets: $0) }
-                if settings.count < 4 {
+                if settings.count < Machine.maxSettings {
                     Button { settings.append(SettingDraft()) } label: {
                         Label("Add setting", systemImage: "plus.circle")
                     }
@@ -282,7 +286,7 @@ struct ExerciseEditorView: View {
             isMachine = true
             machineName = machine.name
             settings = machine.activeSettings.map {
-                var d = SettingDraft(); d.label = $0.label
+                var d = SettingDraft(); d.definitionId = $0.id; d.label = $0.label
                 if let n = $0.numericValue { d.numeric = n } else { d.useOther = true; d.other = $0.otherText ?? "" }
                 return d
             }
@@ -332,20 +336,47 @@ struct ExerciseEditorView: View {
                 context.insert(machine)
                 exercise.machineId = machine.id
             }
-            // Replace the machine's setting definitions with the edited drafts.
-            for def in machine.settingDefinitions { context.delete(def) }
-            machine.settingDefinitions = []
+            // Apply the edited drafts to the machine's setting definitions.
+            //
+            // Definitions are UPDATED in place, not deleted and recreated: a
+            // recorded session's SessionMachineSetting points at a definition by
+            // id, and CatalogSyncService matches on that id. Recreating would
+            // orphan every snapshot and churn the rows of every in-progress
+            // session. Removed settings are SOFT-deleted for the same reason
+            // (principle #4) — never hard-deleted.
+            var existingById: [UUID: MachineSettingDefinition] = [:]
+            for def in machine.settingDefinitions { existingById[def.id] = def }
+
+            var keptIds = Set<UUID>()
             var order = 0
             for s in settings where !s.isEmpty {
-                let def = MachineSettingDefinition(label: s.label.trimmingCharacters(in: .whitespaces),
-                                                   order: order,
-                                                   numericValue: s.useOther ? nil : s.numeric,
-                                                   otherText: s.useOther ? s.other : nil,
-                                                   source: machine.source)
-                def.machine = machine
-                machine.settingDefinitions.append(def)
-                context.insert(def)
+                let label = s.label.trimmingCharacters(in: .whitespaces)
+                let numeric = s.useOther ? nil : s.numeric
+                let other = s.useOther ? s.other : nil
+                if let defId = s.definitionId, let def = existingById[defId] {
+                    def.label = label
+                    def.order = order
+                    def.numericValue = numeric
+                    def.otherText = other
+                    def.deletedAt = nil        // a re-added row comes back
+                    def.updatedAt = .now
+                    keptIds.insert(defId)
+                } else {
+                    let def = MachineSettingDefinition(label: label,
+                                                       order: order,
+                                                       numericValue: numeric,
+                                                       otherText: other,
+                                                       source: machine.source)
+                    def.machine = machine
+                    machine.settingDefinitions.append(def)
+                    context.insert(def)
+                    keptIds.insert(def.id)
+                }
                 order += 1
+            }
+            for def in machine.settingDefinitions where !keptIds.contains(def.id) && def.deletedAt == nil {
+                def.deletedAt = .now
+                def.updatedAt = .now
             }
         } else {
             exercise.machineId = nil

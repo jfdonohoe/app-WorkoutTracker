@@ -461,6 +461,29 @@ struct WorkoutRepository {
         setting.otherText = otherText
     }
 
+    /// Rename a machine setting. Like editing its value, a rename applies to the
+    /// shared definition when there is one, so the label matches everywhere the
+    /// machine is used; `reconcileMachine` pushes it into every other
+    /// not-yet-locked session. Locked history keeps the label it was recorded
+    /// under, because those snapshots are never revisited.
+    func renameSetting(_ setting: SessionMachineSetting,
+                       to newLabel: String,
+                       in exercise: WorkoutSessionExercise) {
+        let trimmed = newLabel.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        setting.label = trimmed
+        if let defId = setting.definitionId {
+            let d = FetchDescriptor<MachineSettingDefinition>(predicate: #Predicate { $0.id == defId })
+            if let def = try? context.fetch(d).first {
+                def.label = trimmed
+                def.updatedAt = .now
+            }
+            if let machineId = exercise.machineId {
+                CatalogSyncService(context).reconcileMachine(machineId)
+            }
+        }
+    }
+
     /// Save a changed machine setting as the machine's FUTURE default (shared).
     /// This mutates the live Machine's setting value; it does NOT alter any past
     /// session snapshots.
@@ -529,7 +552,7 @@ struct WorkoutRepository {
                            alsoAddToMachine: Bool) -> SessionMachineSetting {
         let order = (exercise.machineSettings.map(\.order).max() ?? -1) + 1
         if alsoAddToMachine, let machineId = exercise.machineId, let machine = fetchMachine(machineId),
-           machine.activeSettings.count < 4 {
+           machine.activeSettings.count < Machine.maxSettings {
             let def = MachineSettingDefinition(label: label, order: order,
                                                numericValue: numericValue, otherText: otherText,
                                                source: machine.source)

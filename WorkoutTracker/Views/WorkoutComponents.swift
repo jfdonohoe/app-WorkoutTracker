@@ -240,17 +240,24 @@ struct MachineSettingEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     let setting: SessionMachineSetting
     var machineId: UUID?
-    var onSave: (_ numeric: Int?, _ other: String?) -> Void
+    var onSave: (_ label: String, _ numeric: Int?, _ other: String?) -> Void
+    /// Called when the user deletes this setting; the sheet closes itself first.
+    var onDelete: () -> Void = {}
 
+    @State private var label: String
     @State private var useOther: Bool
     @State private var numeric: Int
     @State private var other: String
+    @State private var confirmDelete = false
 
     init(setting: SessionMachineSetting, machineId: UUID?,
-         onSave: @escaping (Int?, String?) -> Void) {
+         onSave: @escaping (String, Int?, String?) -> Void,
+         onDelete: @escaping () -> Void = {}) {
         self.setting = setting
         self.machineId = machineId
         self.onSave = onSave
+        self.onDelete = onDelete
+        _label = State(initialValue: setting.label)
         _useOther = State(initialValue: setting.numericValue == nil && (setting.otherText?.isEmpty == false))
         _numeric = State(initialValue: setting.numericValue ?? 1)
         _other = State(initialValue: setting.otherText ?? "")
@@ -259,7 +266,11 @@ struct MachineSettingEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(setting.label) {
+                Section("Name") {
+                    TextField("e.g. Seat height", text: $label)
+                        .submitLabel(.done)
+                }
+                Section("Value") {
                     Toggle("Use custom value", isOn: $useOther)
                     if useOther {
                         TextField("Custom value", text: $other)
@@ -270,18 +281,102 @@ struct MachineSettingEditSheet: View {
                         .pickerStyle(.wheel)
                     }
                 }
+                Section {
+                    Button(role: .destructive) { confirmDelete = true } label: {
+                        Label("Delete setting", systemImage: "trash")
+                    }
+                }
             }
             .navigationTitle("Edit Setting")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
+            .onChange(of: label) { _, _ in save() }
             .onChange(of: useOther) { _, _ in save() }
             .onChange(of: numeric) { _, _ in save() }
             .onChange(of: other) { _, _ in save() }
+            .confirmationDialog("Delete \"\(setting.label)\"?",
+                                isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Delete setting", role: .destructive) { dismiss(); onDelete() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This removes the setting from this machine everywhere it's used. Finished workouts keep the value they recorded.")
+            }
         }
     }
 
     private func save() {
-        onSave(useOther ? nil : numeric, useOther ? other : nil)
+        // An empty field mid-edit must not wipe the stored name; keep the last
+        // good label until the user types a real one.
+        let trimmed = label.trimmingCharacters(in: .whitespaces)
+        onSave(trimmed.isEmpty ? setting.label : trimmed,
+               useOther ? nil : numeric, useOther ? other : nil)
+    }
+}
+
+/// Shown over the lower third of the workout screen the moment the final
+/// exercise is completed: confirm and lock the workout, or go back to it.
+///
+/// Saving is deliberately the prominent action but NOT the automatic one —
+/// finishing locks the session permanently (principle #1), so it stays an
+/// explicit choice the user makes, and "Keep going" is always available.
+struct WorkoutCompletePrompt: View {
+    let exerciseCount: Int
+    /// Elapsed time so far, if the session has a start timecode.
+    var duration: TimeInterval?
+    var onSaveAndExit: () -> Void
+    var onKeepGoing: () -> Void
+
+    private var subtitle: String {
+        var parts = ["All \(exerciseCount) exercise\(exerciseCount == 1 ? "" : "s") done"]
+        if let duration, duration > 0 {
+            let minutes = max(1, Int(duration / 60))
+            parts.append("\(minutes) min")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 34))
+                    .foregroundStyle(Theme.statusGreen)
+                Text("Workout complete")
+                    .font(.title3.bold())
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 4)
+
+            VStack(spacing: 10) {
+                Button(action: onSaveAndExit) {
+                    SetActionButtonLabel(title: "Save & Exit Workout",
+                                         systemImage: "flag.checkered",
+                                         tint: Theme.accent)
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onKeepGoing) {
+                    Text("Keep Going")
+                        .font(.headline)
+                        .foregroundStyle(Theme.mutedForeground)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text("Saving locks this workout as permanent history.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Theme.groupedBackground)
     }
 }

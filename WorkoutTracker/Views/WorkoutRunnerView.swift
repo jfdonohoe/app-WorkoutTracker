@@ -23,6 +23,13 @@ struct WorkoutRunnerView: View {
 
     @State private var openExercise: WorkoutSessionExercise?
     @State private var showFinishConfirm = false
+    /// Shown over the lower third once the final exercise is completed.
+    @State private var showFinishPrompt = false
+    /// Set while the exercise sheet is still on screen; consumed in its
+    /// onDismiss. Presenting a second sheet in the same runloop turn as the
+    /// first one's dismissal drops the presentation, so we wait for the
+    /// dismissal to land.
+    @State private var finishPromptPending = false
 
     private var repo: WorkoutRepository { WorkoutRepository(context) }
 
@@ -94,12 +101,27 @@ struct WorkoutRunnerView: View {
                 }
             }
         }
-        .sheet(item: $openExercise) { ex in
+        .sheet(item: $openExercise, onDismiss: {
+            if finishPromptPending {
+                finishPromptPending = false
+                showFinishPrompt = true
+            }
+        }) { ex in
             SessionExerciseSheet(session: session, exercise: ex,
-                                 onExerciseCompleted: { startBetweenExercisesRest(after: ex) },
+                                 onExerciseCompleted: { exerciseCompleted(ex) },
                                  onAdvance: { next in openExercise = next })
                 .environmentObject(restTimer)
                 .id(ex.id)   // fresh state when auto-advancing to the next exercise
+        }
+        .sheet(isPresented: $showFinishPrompt) {
+            WorkoutCompletePrompt(
+                exerciseCount: session.exercises.count,
+                duration: session.duration,
+                onSaveAndExit: { showFinishPrompt = false; finish() },
+                onKeepGoing: { showFinishPrompt = false })
+                // Lower third of the screen, per the workout-complete design.
+                .presentationDetents([.fraction(0.33)])
+                .presentationDragIndicator(.visible)
         }
         .onAppear {
             CatalogSyncService(context).reconcileSession(session)
@@ -151,6 +173,18 @@ struct WorkoutRunnerView: View {
     }
 
     // MARK: - Actions
+
+    /// Called as an exercise's sheet closes after that exercise was completed.
+    /// If it was the LAST one, prompt to save and exit instead of starting a
+    /// cooldown for a workout that has nothing left to do.
+    private func exerciseCompleted(_ ex: WorkoutSessionExercise) {
+        if session.allExercisesComplete {
+            restTimer.stop()
+            finishPromptPending = true
+        } else {
+            startBetweenExercisesRest(after: ex)
+        }
+    }
 
     /// Start the between-exercises cooldown after an exercise is completed and
     /// its sheet closes (only if another exercise still needs work).

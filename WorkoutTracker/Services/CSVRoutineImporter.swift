@@ -36,7 +36,7 @@
 //  In short: a routine row only needs routine + group + exercise; the exercise's
 //  saved definition supplies any prescription left blank.
 //  Optional everywhere: machine, machine_settings, notes.
-//  machine_settings format: "Label=Value; Label2=Value2" (max 4). A numeric
+//  machine_settings format: "Label=Value; Label2=Value2" (max Machine.maxSettings). A numeric
 //  value 1...15 becomes a slider pick; anything else is stored as free text.
 //
 //  One row = one exercise in a routine. Rows with the same routine name are
@@ -363,7 +363,7 @@ struct CSVRoutineImporter {
                     } else {
                         let m = Machine(name: parsed.machine, source: .user)
                         context.insert(m)
-                        for (i, s) in parsed.settings.prefix(4).enumerated() {
+                        for (i, s) in parsed.settings.prefix(Machine.maxSettings).enumerated() {
                             let def = MachineSettingDefinition(label: s.label, order: i,
                                                                numericValue: s.numeric,
                                                                otherText: s.other, source: .user)
@@ -453,14 +453,14 @@ struct CSVRoutineImporter {
         }
     }
 
-    /// Parse "Label=Value; Label2=Value2" into up to 4 setting tuples. A numeric
+    /// Parse "Label=Value; Label2=Value2" into up to Machine.maxSettings setting tuples. A numeric
     /// 1...15 value becomes a slider pick; anything else is stored as free text.
     static func parseSettings(_ raw: String, lineNo: Int,
                               into errors: inout [String]) -> [(label: String, numeric: Int?, other: String?)] {
         var out: [(label: String, numeric: Int?, other: String?)] = []
         let pairs = raw.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        if pairs.count > 4 {
-            errors.append("Line \(lineNo): 'machine_settings' has \(pairs.count) entries; the max is 4.")
+        if pairs.count > Machine.maxSettings {
+            errors.append("Line \(lineNo): 'machine_settings' has \(pairs.count) entries; the max is \(Machine.maxSettings).")
             return []
         }
         for pair in pairs {

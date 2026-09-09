@@ -39,6 +39,7 @@ struct SetBuilderSheet: View {
     @State private var exercise: Exercise?
     @State private var showAddSetting = false
     @State private var otherEditDef: MachineSettingDefinition?
+    @State private var renamingDef: MachineSettingDefinition?
     @State private var didLoad = false
 
     var body: some View {
@@ -126,7 +127,14 @@ struct SetBuilderSheet: View {
         Section {
             ForEach(machine?.activeSettings ?? []) { def in
                 HStack {
-                    Text(def.label)
+                    Button { renamingDef = def } label: {
+                        HStack(spacing: 4) {
+                            Text(def.label)
+                            Image(systemName: "pencil").font(.caption2).foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .tint(.primary)
                     Spacer()
                     Menu {
                         ForEach(1...15, id: \.self) { n in
@@ -137,8 +145,13 @@ struct SetBuilderSheet: View {
                         Text(def.displayValue).bold()
                     }
                 }
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) { deleteDef(def) } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
             }
-            if (machine?.activeSettings.count ?? 0) < 4 {
+            if (machine?.activeSettings.count ?? 0) < Machine.maxSettings {
                 Button { showAddSetting = true } label: {
                     Label("Add machine setting", systemImage: "plus")
                 }
@@ -152,6 +165,12 @@ struct SetBuilderSheet: View {
             TextPromptSheet(title: "Custom value", placeholder: "Value",
                             initial: def.otherText ?? "") { value in
                 setDefValue(def, numeric: nil, other: value)
+            }
+        }
+        .sheet(item: $renamingDef) { def in
+            TextPromptSheet(title: "Setting name", placeholder: "e.g. Seat height",
+                            initial: def.label) { newLabel in
+                renameDef(def, to: newLabel)
             }
         }
     }
@@ -202,8 +221,29 @@ struct SetBuilderSheet: View {
         try? context.save()
     }
 
+    /// Rename a shared setting. `reconcileMachine` pushes the new label into
+    /// every routine and not-yet-locked session using this machine; locked
+    /// history keeps the label it was recorded under.
+    private func renameDef(_ def: MachineSettingDefinition, to newLabel: String) {
+        let trimmed = newLabel.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        def.label = trimmed
+        def.updatedAt = .now
+        if let machineId { CatalogSyncService(context).reconcileMachine(machineId) }
+        try? context.save()
+    }
+
+    /// Soft-delete, never hard-delete: recorded sessions reference this
+    /// definition by id, so the row has to stay resolvable (principle #4).
+    private func deleteDef(_ def: MachineSettingDefinition) {
+        def.deletedAt = .now
+        def.updatedAt = .now
+        if let machineId { CatalogSyncService(context).reconcileMachine(machineId) }
+        try? context.save()
+    }
+
     private func addMachineSetting(label: String, numeric: Int?, other: String?) {
-        guard let machine, machine.activeSettings.count < 4 else { return }
+        guard let machine, machine.activeSettings.count < Machine.maxSettings else { return }
         let order = (machine.settingDefinitions.map(\.order).max() ?? -1) + 1
         let def = MachineSettingDefinition(label: label, order: order,
                                            numericValue: numeric, otherText: other,

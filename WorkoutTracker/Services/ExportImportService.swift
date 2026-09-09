@@ -15,7 +15,7 @@ import SwiftData
 // MARK: - Backup document (stable JSON shape)
 
 struct BackupDocument: Codable {
-    var formatVersion: Int = 1
+    var formatVersion: Int = 2
     var exportedAt: Date = .now
 
     var locations: [LocationDTO] = []
@@ -34,6 +34,10 @@ struct BackupDocument: Codable {
     var sessionMachineSettings: [SessionMachineSettingDTO] = []
     var corrections: [CorrectionDTO] = []
     var schedules: [ScheduleDTO] = []
+    /// Added in formatVersion 2. Optional (not `= []`) so a v1 backup, which
+    /// has no `auditEvents` key at all, still decodes — see the note on
+    /// SessionExerciseDTO for why a plain default value is not enough.
+    var auditEvents: [AuditEventDTO]? = nil
 
     struct LocationDTO: Codable { var id: UUID; var name: String; var source: String; var createdAt: Date; var updatedAt: Date; var deletedAt: Date? }
     struct MachineDTO: Codable { var id: UUID; var name: String; var locationId: UUID?; var source: String; var createdAt: Date; var updatedAt: Date; var deletedAt: Date? }
@@ -46,9 +50,35 @@ struct BackupDocument: Codable {
     struct RoutineExerciseDTO: Codable { var id: UUID; var sectionId: UUID?; var exerciseId: UUID; var machineId: UUID?; var displayName: String; var order: Int; var setCount: Int; var plannedWeight: Double; var plannedReps: Int; var restBetweenSets: Int; var notes: String; var targetEffort: String? }
     struct RoutinePlannedSetDTO: Codable { var id: UUID; var routineExerciseId: UUID?; var order: Int; var plannedReps: Int; var plannedWeight: Double }
     struct SessionDTO: Codable { var id: UUID; var routineId: UUID?; var routineVersionId: UUID?; var routineName: String; var status: String; var source: String; var scheduledDate: Date?; var startedAt: Date?; var endedAt: Date?; var completedAt: Date?; var createdAt: Date; var updatedAt: Date; var deletedAt: Date?; var lockedAt: Date?; var note: String; var restBetweenExercises: Int = 90; var restBetweenSets: Int = 90 }
-    struct SessionExerciseDTO: Codable { var id: UUID; var sessionId: UUID?; var sourceRoutineExerciseId: UUID?; var exerciseId: UUID?; var machineId: UUID?; var name: String; var sectionType: String; var order: Int; var plannedRest: Int; var notes: String; var isAddedDuringWorkout: Bool }
+    struct SessionExerciseDTO: Codable {
+        var id: UUID; var sessionId: UUID?; var sourceRoutineExerciseId: UUID?; var exerciseId: UUID?; var machineId: UUID?
+        var name: String; var sectionType: String; var order: Int; var plannedRest: Int; var notes: String; var isAddedDuringWorkout: Bool
+
+        // Added in formatVersion 2. For cardio and stretching exercises these
+        // fields ARE the recorded result — such exercises have no
+        // WorkoutSessionSet rows, so `markedCompleteAt` is the only evidence the
+        // exercise was performed at all (see WorkoutSessionExercise.isFullyCompleted).
+        // v1 backups dropped them, which silently rendered every cardio and
+        // stretching entry as "skipped" on restore.
+        //
+        // These MUST be Optional, not `var x: Int = 0`: Swift's synthesized
+        // Codable decoder throws on a missing key and does NOT fall back to a
+        // property's default value. Optional properties decode via
+        // decodeIfPresent, so a v1 backup (which has none of these keys) still
+        // imports, with each field coalesced to the model default in `restore`.
+        var groupIndex: Int? = nil
+        var startedAt: Date? = nil
+        var endedAt: Date? = nil
+        var durationMinutes: Int? = nil
+        var intensity: String? = nil
+        var holdSeconds: Int? = nil
+        var sides: Int? = nil
+        var rounds: Int? = nil
+        var markedCompleteAt: Date? = nil
+    }
     struct SessionSetDTO: Codable { var id: UUID; var exerciseId: UUID?; var index: Int; var plannedWeight: Double; var plannedReps: Int; var actualWeight: Double?; var actualReps: Int?; var isCompleted: Bool; var completedAt: Date?; var effort: String?; var effortNote: String?; var note: String?; var restOverride: Int? }
     struct SessionMachineSettingDTO: Codable { var id: UUID; var exerciseId: UUID?; var definitionId: UUID?; var label: String; var order: Int; var numericValue: Int?; var otherText: String? }
+    struct AuditEventDTO: Codable { var id: UUID; var timestamp: Date; var type: String; var entityName: String; var entityId: UUID?; var summary: String; var source: String }
     struct CorrectionDTO: Codable { var id: UUID; var workoutSessionId: UUID; var targetEntity: String; var targetEntityId: UUID?; var field: String; var previousValue: String; var correctedValue: String; var createdAt: Date; var note: String?; var source: String }
     struct ScheduleDTO: Codable { var id: UUID; var routineId: UUID; var freq: String; var interval: Int; var weekdaysRaw: String; var startDate: Date; var untilDate: Date?; var count: Int?; var byMonthDay: Int?; var rrule: String; var exceptionDatesRaw: String = ""; var source: String; var deletedAt: Date? }
 }
@@ -118,7 +148,11 @@ struct ExportImportService {
         for ss in fetchAll(WorkoutSession.self) where keep(ss.source) {
             doc.sessions.append(.init(id: ss.id, routineId: ss.routineId, routineVersionId: ss.routineVersionId, routineName: ss.routineName, status: ss.statusRaw, source: ss.sourceRaw, scheduledDate: ss.scheduledDate, startedAt: ss.startedAt, endedAt: ss.endedAt, completedAt: ss.completedAt, createdAt: ss.createdAt, updatedAt: ss.updatedAt, deletedAt: ss.deletedAt, lockedAt: ss.lockedAt, note: ss.note, restBetweenExercises: ss.restBetweenExercises, restBetweenSets: ss.restBetweenSets))
             for se in ss.exercises {
-                doc.sessionExercises.append(.init(id: se.id, sessionId: ss.id, sourceRoutineExerciseId: se.sourceRoutineExerciseId, exerciseId: se.exerciseId, machineId: se.machineId, name: se.name, sectionType: se.sectionTypeRaw, order: se.order, plannedRest: se.plannedRestBetweenSets, notes: se.notes, isAddedDuringWorkout: se.isAddedDuringWorkout))
+                doc.sessionExercises.append(.init(id: se.id, sessionId: ss.id, sourceRoutineExerciseId: se.sourceRoutineExerciseId, exerciseId: se.exerciseId, machineId: se.machineId, name: se.name, sectionType: se.sectionTypeRaw, order: se.order, plannedRest: se.plannedRestBetweenSets, notes: se.notes, isAddedDuringWorkout: se.isAddedDuringWorkout,
+                                                  groupIndex: se.groupIndex, startedAt: se.startedAt, endedAt: se.endedAt,
+                                                  durationMinutes: se.durationMinutes, intensity: se.intensityRaw,
+                                                  holdSeconds: se.holdSeconds, sides: se.sides, rounds: se.rounds,
+                                                  markedCompleteAt: se.markedCompleteAt))
                 for set in se.sets {
                     doc.sessionSets.append(.init(id: set.id, exerciseId: se.id, index: set.index, plannedWeight: set.plannedWeight, plannedReps: set.plannedReps, actualWeight: set.actualWeight, actualReps: set.actualReps, isCompleted: set.isCompleted, completedAt: set.completedAt, effort: set.perceivedEffortRaw, effortNote: set.effortNote, note: set.note, restOverride: set.restOverrideSeconds))
                 }
@@ -133,6 +167,15 @@ struct ExportImportService {
         for sch in fetchAll(ScheduleRule.self) where keep(sch.source) {
             doc.schedules.append(.init(id: sch.id, routineId: sch.routineId, freq: sch.freqRaw, interval: sch.interval, weekdaysRaw: sch.byWeekdaysRaw, startDate: sch.startDate, untilDate: sch.untilDate, count: sch.count, byMonthDay: sch.byMonthDay, rrule: sch.rruleString, exceptionDatesRaw: sch.exceptionDatesRaw, source: sch.sourceRaw, deletedAt: sch.deletedAt))
         }
+        // The append-only audit log (session.started / session.finished /
+        // routine.versioned / import.performed ...). It is the only record of
+        // WHEN data-safety-relevant things happened, so a backup that omits it
+        // cannot reproduce the Data Safety Check screen after a restore.
+        var audits: [BackupDocument.AuditEventDTO] = []
+        for a in fetchAll(AuditEvent.self) where keep(a.source) {
+            audits.append(.init(id: a.id, timestamp: a.timestamp, type: a.type, entityName: a.entityName, entityId: a.entityId, summary: a.summary, source: a.sourceRaw))
+        }
+        doc.auditEvents = audits
         return doc
     }
 
@@ -245,6 +288,18 @@ struct ExportImportService {
         for d in doc.sessionExercises {
             if exists(WorkoutSessionExercise.self, id: d.id) { result.skipped += 1; continue }
             let se = WorkoutSessionExercise(id: d.id, sourceRoutineExerciseId: d.sourceRoutineExerciseId, exerciseId: d.exerciseId, machineId: d.machineId, name: d.name, sectionType: SectionType(rawValue: d.sectionType) ?? .strength, order: d.order, plannedRestBetweenSets: d.plannedRest, notes: d.notes, isAddedDuringWorkout: d.isAddedDuringWorkout)
+            // formatVersion 2 fields. A v1 backup carries none of them, so each
+            // falls back to the same default the model itself declares — that
+            // restore is exactly as lossy as the v1 file, and no worse.
+            se.groupIndex = d.groupIndex ?? 0
+            se.startedAt = d.startedAt
+            se.endedAt = d.endedAt
+            se.durationMinutes = d.durationMinutes ?? 0
+            se.intensityRaw = d.intensity ?? ""
+            se.holdSeconds = d.holdSeconds ?? 0
+            se.sides = d.sides ?? 1
+            se.rounds = d.rounds ?? 1
+            se.markedCompleteAt = d.markedCompleteAt
             if let sid = d.sessionId, let ss = first(WorkoutSession.self, id: sid) { se.session = ss; ss.exercises.append(se) }
             context.insert(se); result.added += 1
         }
@@ -272,6 +327,14 @@ struct ExportImportService {
             let sch = ScheduleRule(id: d.id, routineId: d.routineId, freq: RecurrenceFrequency(rawValue: d.freq) ?? .weekly, interval: d.interval, weekdays: [], startDate: d.startDate, untilDate: d.untilDate, count: d.count, byMonthDay: d.byMonthDay, source: src(d.source))
             sch.byWeekdaysRaw = d.weekdaysRaw; sch.rruleString = d.rrule; sch.exceptionDatesRaw = d.exceptionDatesRaw; sch.deletedAt = d.deletedAt
             context.insert(sch); result.added += 1
+        }
+
+        // Audit events are append-only history in their own right; restore them
+        // before logging this import so the log reads in chronological order.
+        for d in doc.auditEvents ?? [] {
+            if exists(AuditEvent.self, id: d.id) { result.skipped += 1; continue }
+            let a = AuditEvent(id: d.id, type: d.type, entity: d.entityName, entityId: d.entityId, summary: d.summary, source: src(d.source), timestamp: d.timestamp)
+            context.insert(a); result.added += 1
         }
 
         Audit.log(context, type: "import.performed", entity: "*", summary: result.summary, source: .user)

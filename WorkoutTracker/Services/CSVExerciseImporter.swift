@@ -13,7 +13,7 @@
 //                sides, rounds, notes (no machine)
 //
 //  Machine settings are split into explicit columns: settingK_label + settingK_value
-//  for K = 1...4 (the app caps a machine at 4 settings). A numeric value 1...15 is a
+//  for K = 1...10 (the app caps a machine at Machine.maxSettings). A numeric value 1...15 is a
 //  slider pick; anything else is stored as free text.
 //
 //  Strength reads as many setK_reps/setK_value pairs as the header defines, so a
@@ -250,7 +250,7 @@ struct CSVExerciseImporter {
                 } else {
                     let m = Machine(name: r.machine, source: .user)
                     context.insert(m)
-                    for (i, s) in r.settings.prefix(4).enumerated() {
+                    for (i, s) in r.settings.prefix(Machine.maxSettings).enumerated() {
                         let def = MachineSettingDefinition(label: s.label, order: i,
                                                            numericValue: s.numeric, otherText: s.other, source: .user)
                         def.machine = m
@@ -363,13 +363,13 @@ struct CSVExerciseImporter {
         return nil
     }
 
-    /// Read settingK_label + settingK_value columns (K = 1...4) into settings.
+    /// Read settingK_label + settingK_value columns (K = 1...Machine.maxSettings) into settings.
     private func parseMachineSettings(_ row: [String],
                                       field: ([String], String) -> String,
                                       lineNo: Int,
                                       into errors: inout [String]) -> [(label: String, numeric: Int?, other: String?)] {
         var out: [(label: String, numeric: Int?, other: String?)] = []
-        for i in 1...4 {
+        for i in 1...Machine.maxSettings {
             let label = field(row, "setting\(i)_label")
             let value = field(row, "setting\(i)_value")
             if label.isEmpty && value.isEmpty { continue }

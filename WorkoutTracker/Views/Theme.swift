@@ -45,6 +45,11 @@ enum Theme {
     static let statusBlack = Color.black
 
     // MARK: Neutrals
+    /// Launch-screen brand green (#6E7A3F). MUST match the background colour in
+    /// LaunchBackdrop.storyboard, or the hand-off from the launch screen to
+    /// SplashView flashes. Change both together.
+    static let launchBackground = Color(red: 0x6E/255, green: 0x7A/255, blue: 0x3F/255)
+
     /// App / grouped screen background (#FAF8F2, warm off-white).
     static let groupedBackground = Color(red: 0xFA/255, green: 0xF8/255, blue: 0xF2/255)
     /// Card / surface (#FFFFFF).

@@ -68,11 +68,18 @@ final class Machine {
     var updatedAt: Date
     var deletedAt: Date?
 
-    /// Up to 4 labeled setting definitions (seat height, arm position, ...).
+    /// Up to `Machine.maxSettings` labeled setting definitions (seat height,
+    /// arm position, ...).
     /// Cascade is safe: definitions belong only to this machine. History keeps
     /// its OWN snapshot copy, so deleting a definition never affects history.
     @Relationship(deleteRule: .cascade, inverse: \MachineSettingDefinition.machine)
     var settingDefinitions: [MachineSettingDefinition]
+
+    /// How many labeled setting slots one machine may have. Every UI that adds a
+    /// setting checks this; keep it in ONE place so the cap can't drift between
+    /// the catalog editor, the routine builder, the CSV importers and the
+    /// in-workout sheet.
+    static let maxSettings = 10
 
     var source: DataSource {
         get { DataSource(rawValue: sourceRaw) ?? .user }
@@ -104,7 +111,8 @@ final class Machine {
     }
 }
 
-/// A single labeled machine setting slot (max 4 per machine), e.g. "Seat height".
+/// A single labeled machine setting slot (max `Machine.maxSettings` per
+/// machine), e.g. "Seat height".
 /// It holds both its label and the machine's CURRENT shared default value.
 /// When a workout starts, the value is snapshot into the session, so changing
 /// the shared default later never rewrites past workouts.
@@ -114,7 +122,7 @@ final class MachineSettingDefinition {
     var machine: Machine?
     /// User-created label. Required (every setting must have a label).
     var label: String
-    /// Slot index 0...3.
+    /// Slot index, 0 ..< `Machine.maxSettings`.
     var order: Int
 
     /// Current shared default value. Either a 1...15 numeric pick, or free text

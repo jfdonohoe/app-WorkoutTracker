@@ -92,8 +92,11 @@ struct SessionExerciseSheet: View {
                 }
             }
             .sheet(item: $editingSetting) { setting in
-                MachineSettingEditSheet(setting: setting, machineId: exercise.machineId) { numeric, other in
-                    apply(setting: setting, numeric: numeric, other: other)
+                MachineSettingEditSheet(setting: setting, machineId: exercise.machineId) { label, numeric, other in
+                    apply(setting: setting, label: label, numeric: numeric, other: other)
+                } onDelete: {
+                    repo.deleteSetting(setting, from: exercise)
+                    try? context.save()
                 }
             }
             .fullScreenCover(isPresented: $showCamera) {
@@ -625,8 +628,11 @@ struct SessionExerciseSheet: View {
     /// Machine settings always save to the shared machine definition (everywhere)
     /// as well as this workout's snapshot, and reconcile every OTHER in-progress
     /// session sharing the same machine.
-    private func apply(setting: SessionMachineSetting, numeric: Int?, other: String?) {
+    private func apply(setting: SessionMachineSetting, label: String, numeric: Int?, other: String?) {
         repo.updateSessionSetting(setting, numericValue: numeric, otherText: other)
+        if label != setting.label {
+            repo.renameSetting(setting, to: label, in: exercise)
+        }
         if let defId = setting.definitionId {
             repo.saveSettingAsFutureDefault(definitionId: defId, numericValue: numeric, otherText: other)
             if let machineId = exercise.machineId {

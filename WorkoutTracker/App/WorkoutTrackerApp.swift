@@ -16,6 +16,10 @@ struct WorkoutTrackerApp: App {
     let container: ModelContainer?
     @StateObject private var restTimer = RestTimerService()
     @Environment(\.scenePhase) private var scenePhase
+    /// Covers the app with the branded artwork for a beat after launch. See
+    /// SplashView for why the branding lives here and not in the launch
+    /// storyboard.
+    @State private var showSplash = true
 
     /// True when this process is an XCTest host — XCTest injects the test
     /// bundle into a running instance of this app, so `init()`/`body` still
@@ -48,14 +52,29 @@ struct WorkoutTrackerApp: App {
     var body: some Scene {
         WindowGroup {
             if let container {
-                RootView()
-                    .environmentObject(restTimer)
-                    // Keep the screen awake whenever the app is in the foreground.
-                    .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
-                    .onChange(of: scenePhase) { _, phase in
-                        UIApplication.shared.isIdleTimerDisabled = (phase == .active)
+                ZStack {
+                    RootView()
+                        .environmentObject(restTimer)
+                        // Keep the screen awake whenever the app is in the foreground.
+                        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
+                        .onChange(of: scenePhase) { _, phase in
+                            UIApplication.shared.isIdleTimerDisabled = (phase == .active)
+                        }
+                        .modelContainer(container)
+
+                    if showSplash {
+                        SplashView()
+                            .transition(.opacity)
                     }
-                    .modelContainer(container)
+                }
+                // The app is fully built underneath while this is up, so the
+                // splash costs nothing but the hold time.
+                .task {
+                    try? await Task.sleep(for: SplashTiming.hold)
+                    withAnimation(.easeOut(duration: SplashTiming.fade)) {
+                        showSplash = false
+                    }
+                }
             }
         }
     }

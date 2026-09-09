@@ -44,7 +44,7 @@ struct ImportExportView: View {
 
     private var exGroupFooter: String {
         let photoNote = " An optional photo_url column links a web image (jpg/png/gif) that is downloaded and used as the exercise's photo."
-        let base = "Builds your \(exGroup.displayName.lowercased()) exercises. Exercises that already exist are skipped — only new ones are added. A malformed row blocks the whole import. Machine settings use settingK_label/settingK_value columns (K = 1…4). "
+        let base = "Builds your \(exGroup.displayName.lowercased()) exercises. Exercises that already exist are skipped — only new ones are added. A malformed row blocks the whole import. Machine settings use settingK_label/settingK_value columns (K = 1…\(Machine.maxSettings)). "
         switch exGroup {
         case .strength:
             return base + "Columns: exercise, machine, setting1–4_label/value, set1…set5_reps/weight, notes, photo_url. Each set has its own reps + weight; empty set columns are skipped (only filled sets are created). The template includes 5 sets; the app supports up to 15 (add more setK columns)." + photoNote

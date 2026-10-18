@@ -33,5 +33,7 @@ fastlane/test_output/
 *.mobileprovision
 *.provisionprofile
 
-# Claude or local notes you may not want in Git
-.claude/
+# Claude or local notes you may not want in Git, except the shared project agents
+.claude/*
+!.claude/agents/
+!.claude/hooks/

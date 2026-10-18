@@ -64,7 +64,17 @@
 
 **Contract change from the run.** The §8 "PLAUSIBLE when the change isn't yet proven behaviour-preserving" rule was dropped: it conflicted with the Validation column's "or the test to write first", the agent didn't follow it, and the evaluator had already flagged (finding 8) that it changed PLAUSIBLE's meaning. A complexity finding is CONFIRMED when the code is as described; the test to write goes in Validation and the refactorer's Step 3 enforces it. The answer key's four untested items are now `CONFIRMED` to match.
 
-**To do before the numbers mean anything:** fix the two real issues in `02-clean`, re-run `01-complexity` with root-relative paths (expect the harness to agree with the hand count), and run each case 3× for consistency.
+## Second runs (2026-10-18, after the fixes and the path contract)
+
+| Case | Cost | Time | Harness | Hand |
+|---|---|---|---|---|
+| auditor `01-complexity` | $2.68 | 8.6 min | **recall 6/7, precision 1.0, FP 0, decoys 0** | 7/7: the one "miss" (the one-conformer protocol) was reported as a PLAUSIBLE P3 in a numbered list the parser doesn't read. Batches: §8 items in Batch 2 with the test to write named first; the threaded binding in Batch 3; the tested `label` collapse in Batch 1, which the contract then forbade but which is right when an existing test pins it. Found the real `try?` sites and the missing `.gitignore` as well. |
+| auditor `02-clean` (first fix) | $2.54 | 6.9 min | FP 5 | Health "Healthy", complexity "Low". 1 defensible P1 on code added by the first fix (mutate-then-save with no rollback), 2 P3s the fixture's README invites (views in the app file; three test builders), 1 P3 §8 note, 1 self-labelled "stylistic preference only". Genuine §8 FPs: 1 P3. |
+
+**Contract changes from the second runs:** a complexity finding pinned by an existing test may go in Batch 1 (Validation names the test); the Confirmed table and the Possible Issues table both carry a Verdict column and Possible Issues must be a table, so the harness (and anyone merging reports) reads verdicts per row. **Fixture changes:** `02-clean` revised a second time (rollback on failed save, views out of the app file, one shared test builder, locale-safe formatter tests, a declared test scheme); `01-complexity`'s unplanted rest-timer bug fixed.
+
+**Still to do:** run each case 3× for consistency (~$8 per case), and a `02-clean` run against the second revision.
+
 
 ## Limits
 

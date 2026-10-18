@@ -216,7 +216,7 @@ For every complexity finding, the Recommended Change column must describe the si
 Rules for this area:
 
 * Report each item once, under the first review area it fits. If it also fits §1–§3, say so in the Finding cell instead of repeating it.
-* Complexity findings go in Batch 2 (the existing or new test named in Validation); simplifications inside SwiftUI view bodies, where no unit test reaches, go in Batch 3 unless a screenshot comparison or a UI test is named as the proof. Never Batch 1.
+* Complexity findings go in Batch 2 (the test to write first is named in Validation), or in Batch 1 only when an existing test already pins the exact behaviour and Validation names it. Simplifications inside SwiftUI view bodies, where no unit test reaches, go in Batch 3 unless a screenshot comparison or a UI test is named as the proof.
 * Unreachable branches are dead code: a `PLAUSIBLE` lead for dead-code-finder, not an §8 finding.
 * Removing a one-user protocol, generic or wrapper is a design-pattern change and is bounded by the rule above: only when it creates a concrete and material maintainability cost, which the Why It Matters cell must state.
 
@@ -246,8 +246,8 @@ For each major folder or layer, provide:
 
 For each confirmed item, provide:
 
-| Priority | Files | Finding | Why It Matters | Recommended Change | Expected Benefit | Risk | Validation |
-| -------- | ----- | ------- | -------------- | ------------------ | ---------------- | ---- | ---------- |
+| Priority | Verdict | Files | Finding | Why It Matters | Recommended Change | Expected Benefit | Risk | Validation |
+| -------- | ------- | ----- | ------- | -------------- | ------------------ | ---------------- | ---- | ---------- |
 
 Use these priorities:
 
@@ -258,13 +258,16 @@ Use these priorities:
 
 This is the shared scale for every reviewer agent in this project. Do not use High/Medium/Low or any other scale.
 
-Every item in this table has verdict `CONFIRMED`: you read the cited code and it does what the finding says.
+Every item in this table has verdict `CONFIRMED` in its Verdict column: you read the cited code and it does what the finding says.
 
 ## Possible Issues Requiring Verification
 
-List items that look suspicious but cannot be proven from static review alone. These have verdict `PLAUSIBLE`. Give each one a P0–P3 priority as well, rated as if it were true.
+List items that look suspicious but cannot be proven from static review alone. These have verdict `PLAUSIBLE`. Give each one a P0–P3 priority as well, rated as if it were true. Use a table, not a list:
 
-For each item, explain exactly how it should be verified.
+| Priority | Verdict | Files | Finding | How to verify |
+| -------- | ------- | ----- | ------- | ------------- |
+
+The How to verify cell says exactly how the item should be checked.
 
 ## Functionality Preservation Checklist
 

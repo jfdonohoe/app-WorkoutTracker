@@ -73,7 +73,19 @@
 
 **Contract changes from the second runs:** a complexity finding pinned by an existing test may go in Batch 1 (Validation names the test); the Confirmed table and the Possible Issues table both carry a Verdict column and Possible Issues must be a table, so the harness (and anyone merging reports) reads verdicts per row. **Fixture changes:** `02-clean` revised a second time (rollback on failed save, views out of the app file, one shared test builder, locale-safe formatter tests, a declared test scheme); `01-complexity`'s unplanted rest-timer bug fixed.
 
-**Still to do:** run each case 3× for consistency (~$8 per case), and a `02-clean` run against the second revision.
+## Third runs (2026-10-18, 3× each): half lost to the usage limit
+
+| Case | Runs completed | Cost (all 6) | Result |
+|---|---|---|---|
+| auditor `01-complexity` | 1 of 3 | $5.96 | The completed run: 6/7 by harness, 0 FP, 0 decoys, same as run 2. Runs 1 and 3 ended after 29 and 33 turns with "You've hit your session limit · resets 4pm": the claude.ai usage limit, not the agent. |
+| auditor `02-clean` (2nd revision) | 2 of 3 | $5.95 | Both: Health "Healthy", complexity "Low". Confirmed rows were all P3 and mostly self-labelled "stylistic": the `switch` with expression patterns (both runs), file placement, a `var` that should be `let` in a test. One P2 on the week anchor depending on the query's sort order (fair). Possible Issues were legitimate §4/§5/§6 notes on the fixture: no VersionedSchema, `toggle` not checking the set belongs to the session, per-render derivation cost, placeholder bundle id, two correct dead-code leads. Run 2 hit the usage limit; it had also run `rm -rf /tmp/lifts-audit-…` to remove a temp folder it made, which the read-only check counts as a forbidden command (nothing in the repo was touched). |
+
+So consistency wasn't measured: one complete run on `01-complexity`, two on `02-clean`. The three aborted runs cost $4.77 for nothing. Lesson for the harness: `run_case.py` should detect the usage-limit message and stop the batch instead of spending the remaining runs.
+
+**Key redesign for `02-clean`.** A seven-area auditor keeps finding legitimate §1/§4/§5/§6 items on any fixture, so "exhaustive: every finding is a false positive" measured the fixture, not the §8 area. The key is now non-exhaustive with five decoys scoped to the §8-shaped code (the idiomatic `switch`, per-render derivation, the save/rollback, the week-block routine, the `fatalError` init); `decoy_hits_confirmed` is the §8 false-positive number, and everything else is adjudicated by hand. Fixture revised a third time to remove the legitimate findings: inverse relationships so `toggle` finds its own session, a `VersionedSchema` and migration plan, the week anchor from `min()` rather than the query's sort, `TodayScreen` in its own file, a real bundle id prefix.
+
+**Still to do:** 3× each on the current fixtures and key, when the usage budget allows (~$8 per case).
+
 
 
 ## Limits

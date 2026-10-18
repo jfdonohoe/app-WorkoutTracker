@@ -52,6 +52,20 @@
 2. **Benchmark** for the auditor's §8 and the refactorer's no-commit and pin-first rules (finding 17). Until it exists, the complexity area is unmeasured and its false-positive risk is unknown.
 3. **Re-run the trigger check** after the description change (about $10) or accept the edit on reading.
 
+## First benchmark runs (2026-10-18, one run each)
+
+| Case | Cost | Time | Harness score | Hand adjudication |
+|---|---|---|---|---|
+| auditor `01-complexity` | $2.83 | 7.3 min | recall 0/7, FP 0 | **Recall 7/7**: every planted §8 item found, each with its simpler form and the covering test or the test to write. Decoys 0/4 flagged. Batch placement right: §8 items in Batch 2, the threaded binding in Batch 3, the tested view model in Batch 2. Verdicts 4/7 against the key (three untested items were CONFIRMED where the key said PLAUSIBLE). Bonus: a real, unplanted bug, `RestTimerModel.isRunning` is false right after `start()` so the timer loop never runs (`RestTimerModel.swift:15,18`, confirmed by reading). |
+| auditor `02-clean` | $2.07 | 5.8 min | FP 13 | Most "false positives" are real findings on a fixture that isn't clean: `try? context.save()` twice discarding errors (§6), the done-set rule written twice (§2). Genuine §8 nitpicks: 2, both P3 (`?? []` after a key lookup; two near-identical test builders). 1 key-listed FP (the `fatalError` init, raised as a PLAUSIBLE product decision). |
+| refactorer `01-pin-first` | $2.06 | 4.6 min | `check_run.py` PASS ×3 | No git write attempted; pinning tests (17 new) written at call 19, first production edit at call 21; `swift test` run five times, including between pin and change. The git-guard hook was not exercised here (no git write, and the hook file isn't in the fixture); it was exercised live in the project instead: `git stash list` blocked, `git status` and `git branch --show-current` allowed. The guard now lets `stash list`, `stash show` and `tag -l` through. |
+
+**Why the harness scores are wrong for the auditor.** `score.py` matches file paths exactly, and the auditor cited `Services/PlanImporter.swift` where the key says `Lifts/Services/PlanImporter.swift`; and its format score expects per-finding `category`/`verdict`/`summary` fields the auditor's 8-column table doesn't have. Fixes made: the auditor must now cite paths from the repository root (contract change, good for merging too). Not changed: the parser; its format score will stay 0 for this agent until the shared contract gains those fields or the parser learns this table.
+
+**Contract change from the run.** The §8 "PLAUSIBLE when the change isn't yet proven behaviour-preserving" rule was dropped: it conflicted with the Validation column's "or the test to write first", the agent didn't follow it, and the evaluator had already flagged (finding 8) that it changed PLAUSIBLE's meaning. A complexity finding is CONFIRMED when the code is as described; the test to write goes in Validation and the refactorer's Step 3 enforces it. The answer key's four untested items are now `CONFIRMED` to match.
+
+**To do before the numbers mean anything:** fix the two real issues in `02-clean`, re-run `01-complexity` with root-relative paths (expect the harness to agree with the hand count), and run each case 3× for consistency.
+
 ## Limits
 
 Static reading plus one routing pass of 8 prompts. No effectiveness measured. The refactorer changed once during the run; its findings refer to the 10:55 version, and the fixes above were applied after the report, unmeasured.

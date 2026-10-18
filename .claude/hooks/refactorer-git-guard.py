@@ -23,8 +23,12 @@ GIT_OPTS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
 SEPARATORS = {";", "&&", "||", "|", "&"}
 
 
+# Read-only forms of otherwise state-changing subcommands.
+READ_ONLY_FORMS = {("stash", "list"), ("stash", "show"), ("tag", "-l"), ("tag", "--list")}
+
+
 def git_subcommand(tokens):
-    """The git subcommand in one shell segment, or None."""
+    """The git subcommand in one shell segment, or None for a read."""
     if "git" not in tokens:
         return None
     i = tokens.index("git") + 1
@@ -36,6 +40,9 @@ def git_subcommand(tokens):
         if t.startswith("-"):
             i += 1
             continue
+        nxt = tokens[i + 1] if i + 1 < len(tokens) else None
+        if (t, nxt) in READ_ONLY_FORMS:
+            return None
         return t
     return None
 

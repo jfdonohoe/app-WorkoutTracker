@@ -211,7 +211,7 @@ Look for code that could be simpler while doing exactly the same thing:
 * Long parameter lists, and tuples or parallel arrays for values that always travel together
 * State threaded through several layers that could be derived where it is used
 
-For every complexity finding, the Recommended Change column must describe the simpler form (one line of prose or pseudocode, no Swift), and the Validation column must name how to prove the behaviour is unchanged: the existing test that covers it, or the test to write first. A finding whose change cannot yet be proven behaviour-preserving is `PLAUSIBLE`, not `CONFIRMED`, with the test to write as its verification. Being hard to read on first contact is not a finding by itself; show what the simpler version would be.
+For every complexity finding, the Recommended Change column must describe the simpler form (one line of prose or pseudocode, no Swift), and the Validation column must name how to prove the behaviour is unchanged: the existing test that covers it, or the test to write first (the refactorer writes that test before it edits). The verdict follows the shared rule: `CONFIRMED` when you read the code and it is as the Finding says, whether or not a test exists yet. Being hard to read on first contact is not a finding by itself; show what the simpler version would be.
 
 Rules for this area:
 
@@ -262,7 +262,7 @@ Every item in this table has verdict `CONFIRMED`: you read the cited code and it
 
 ## Possible Issues Requiring Verification
 
-List items that look suspicious but cannot be proven from static review alone, or (for §8) whose change cannot yet be proven behaviour-preserving. These have verdict `PLAUSIBLE`. Give each one a P0–P3 priority as well, rated as if it were true.
+List items that look suspicious but cannot be proven from static review alone. These have verdict `PLAUSIBLE`. Give each one a P0–P3 priority as well, rated as if it were true.
 
 For each item, explain exactly how it should be verified.
 
@@ -311,6 +311,8 @@ List architectural areas or workflows that appear fragile, important, or insuffi
 ## Final Recommendation
 
 State the safest next action in one concise paragraph.
+
+Cite every file by its path from the repository root (for example `WorkoutTracker/Views/SettingsView.swift`, not `Views/SettingsView.swift`), with line numbers where the finding is narrower than the file.
 
 Do not write code.
 

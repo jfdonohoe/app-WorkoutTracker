@@ -54,11 +54,12 @@ struct RecurrenceState: Equatable {
     private var resolvedCount: Int? { endMode == .after ? count : nil }
     private var resolvedMonthDay: Int? { freq == .monthly ? Calendar.current.component(.day, from: normalizedStart) : nil }
 
-    func buildRule(routineId: UUID) -> ScheduleRule {
+    /// `source` is the routine's demo/user side; a schedule belongs to it.
+    func buildRule(routineId: UUID, source: DataSource = .user) -> ScheduleRule {
         ScheduleRule(routineId: routineId, freq: freq, interval: interval,
                      weekdays: resolvedWeekdays, startDate: normalizedStart,
                      untilDate: resolvedUntil, count: resolvedCount,
-                     byMonthDay: resolvedMonthDay, source: .user)
+                     byMonthDay: resolvedMonthDay, source: source)
     }
 
     func apply(to rule: ScheduleRule) {

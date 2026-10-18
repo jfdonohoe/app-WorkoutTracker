@@ -117,8 +117,8 @@ final class MachineSettingsTests: XCTestCase {
 
         // One more: the machine stays at the cap, but the value is still recorded
         // against this workout so the user's entry isn't silently lost.
-        let overflow = workouts.addSessionSetting(to: exercise, label: "One too many", numericValue: 3,
-                                                  otherText: nil, alsoAddToMachine: true)
+        let overflow = try XCTUnwrap(workouts.addSessionSetting(to: exercise, label: "One too many", numericValue: 3,
+                                                                otherText: nil, alsoAddToMachine: true))
         try ctx.save()
         XCTAssertEqual(machine.activeSettings.count, Machine.maxSettings, "cap exceeded")
         XCTAssertNil(overflow.definitionId, "overflow setting should be session-local")

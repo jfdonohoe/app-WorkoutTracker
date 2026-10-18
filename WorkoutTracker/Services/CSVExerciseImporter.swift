@@ -3,7 +3,8 @@
 //  WorkoutTracker
 //
 //  Imports the EXERCISE LIBRARY from CSV. Each exercise GROUP has its OWN template
-//  and import, with only the columns that group needs:
+//  and import. A row with a `kind` uses that kind's columns (see
+//  CSVExerciseFields); a row without one uses the older columns:
 //
 //   • strength → exercise, machine, setting1..4_label/value,
 //                set1..N_reps/weight (each set its own reps + weight), notes
@@ -13,14 +14,24 @@
 //                sides, rounds, notes (no machine)
 //
 //  Machine settings are split into explicit columns: settingK_label + settingK_value
-//  for K = 1...10 (the app caps a machine at Machine.maxSettings). A numeric value 1...15 is a
+//  for K = 1...10 (the app caps a machine at Machine.maxSettings). A numeric value 0...15 is a
 //  slider pick; anything else is stored as free text.
 //
-//  Strength reads as many setK_reps/setK_value pairs as the header defines, so a
-//  routine can have any number of sets with independent reps/weight.
+//  Older strength rows read as many setK_reps/setK_weight pairs as the header
+//  defines, so an exercise can have any number of sets with independent reps/weight.
+//
+//  Each new exercise gets its own machine: two exercises can name the same
+//  machine, but each keeps its own weight and settings.
 //
 //  Import is ADDITIVE: an exercise that already exists (same name + group) is
-//  ignored, and only new exercises are created. Import is ALL-OR-NOTHING for
+//  ignored, and only new exercises are created. With `replaceExisting` (the
+//  Google Sheet and CSV file imports), a row with a kind instead overwrites the existing
+//  exercise's definition in place — fields, machines, weights and settings —
+//  keeping its id so history and routines still point at it. Machines are
+//  matched by name; one no longer listed is unlinked, never deleted.
+//
+//  `extraMachines` gives a Machine exercise more machines after the row's
+//  own (^ rows, from a sheet tab or the file itself). The row's machine is the default. Import is ALL-OR-NOTHING for
 //  VALIDATION (any malformed row imports nothing). Shares
 //  the CSV parser and CSVImportError / CSVImportReport with CSVRoutineImporter.
 //
@@ -33,17 +44,33 @@ import UIKit
 @MainActor
 final class PhotoImportStatus: ObservableObject {
     @Published private(set) var total = 0
-    @Published private(set) var done = 0
+    /// New photos (the exercise had none).
+    @Published private(set) var added = 0
+    /// Photos replaced because the image at the link changed.
+    @Published private(set) var updated = 0
+    /// Re-fetched and the same as before, or set in the app meanwhile.
+    @Published private(set) var unchanged = 0
     @Published private(set) var failed = 0
 
-    var pending: Int { max(0, total - done - failed) }
+    var pending: Int { max(0, total - added - updated - unchanged - failed) }
     var isDownloading: Bool { total > 0 && pending > 0 }
     var isFinished: Bool { total > 0 && pending == 0 }
 
-    func begin(_ count: Int) { total = count; done = 0; failed = 0 }
-    func reset() { total = 0; done = 0; failed = 0 }
-    func recordSuccess() { done += 1 }
+    func begin(_ count: Int) { total = count; added = 0; updated = 0; unchanged = 0; failed = 0 }
+    func reset() { begin(0) }
+    func record(_ result: PhotoRefresh) {
+        switch result {
+        case .added: added += 1
+        case .updated: updated += 1
+        case .unchanged: unchanged += 1
+        }
+    }
     func recordFailure() { failed += 1 }
+}
+
+/// What a downloaded photo did to its exercise.
+enum PhotoRefresh: Equatable {
+    case added, updated, unchanged
 }
 
 @MainActor
@@ -51,11 +78,27 @@ struct CSVExerciseImporter {
     let context: ModelContext
     let group: SectionType
     let photoStatus: PhotoImportStatus?
+    let replaceExisting: Bool
+    /// False when the caller saves (or rolls back) several imports together;
+    /// photos to fetch are then left in the report for the caller.
+    let saves: Bool
 
-    init(_ context: ModelContext, group: SectionType, photoStatus: PhotoImportStatus? = nil) {
+    typealias Setting = (label: String, numeric: Int?, other: String?)
+
+    /// One more machine for an exercise: a user label, its weight and settings.
+    struct MachineSpec {
+        var name: String
+        var weight: Double?
+        var settings: [Setting] = []
+    }
+
+    init(_ context: ModelContext, group: SectionType, photoStatus: PhotoImportStatus? = nil,
+         replaceExisting: Bool = false, saves: Bool = true) {
         self.context = context
         self.group = group
         self.photoStatus = photoStatus
+        self.replaceExisting = replaceExisting
+        self.saves = saves
     }
 
     // MARK: - Templates
@@ -63,25 +106,29 @@ struct CSVExerciseImporter {
     static func template(for group: SectionType) -> String {
         switch group {
         case .strength:
+            // The ^ row gives Leg Press a second machine (the first is the default).
             return """
-            exercise,machine,setting1_label,setting1_value,setting2_label,setting2_value,setting3_label,setting3_value,setting4_label,setting4_value,set1_reps,set1_weight,set2_reps,set2_weight,set3_reps,set3_weight,set4_reps,set4_weight,set5_reps,set5_weight,notes,photo_url
-            Leg Press,Leg Press,Seat height,5,Back angle,3,,,,,12,100,10,120,10,120,8,140,6,160,Pyramid up,
-            Chest Press,Chest Press,Seat height,6,,,,,,,10,60,10,60,10,60,,,,,,
-            Lat Pulldown,Lat Pulldown,Seat height,4,Thigh pad,7,,,,,12,80,10,90,10,90,8,100,,,,
+            exercise,kind,reps,sets,weight,per_side,per_side_custom,implement,added_weight,hold_seconds,machine,setting1_label,setting1_value,setting2_label,setting2_value,setting3_label,setting3_value,setting4_label,setting4_value,setting5_label,setting5_value,setting6_label,setting6_value,notes,photo_url
+            Leg Press,machine,10,3,140,single,,,,,Leg Press,Seat height,5,Back angle,3,,,,,,,,,Pyramid up,
+            ^,,,,120,,,,,,Leg Press (plate loaded),Seat height,4,Foot plate,High,,,,,,,,,,
+            Dumbbell Curl,free_weight,12,3,25,alternating,,dumbbell,,,,,,,,,,,,,,,,Weight is per hand,
+            Push-up,bodyweight,15,3,,single,,,,,,,,,,,,,,,,,,,
+            Plank,hold,1,3,,single,,,,45,,,,,,,,,,,,,,,
             """
         case .cardio:
             return """
-            exercise,machine,setting1_label,setting1_value,setting2_label,setting2_value,setting3_label,setting3_value,setting4_label,setting4_value,duration_min,intensity,notes,photo_url
-            Treadmill,,,,,,,,,,20,moderate,Steady pace,
-            Stationary Bike,,,,,,,,,,15,low,Cooldown spin,
-            Rowing Machine,Rower,Resistance,8,,,,,,,12,high,Hard intervals,
+            exercise,kind,duration_min,distance,work_seconds,recovery_seconds,rounds,effort,reps,sets,per_side,machine,setting1_label,setting1_value,setting2_label,setting2_value,setting3_label,setting3_value,setting4_label,setting4_value,setting5_label,setting5_value,setting6_label,setting6_value,notes,photo_url
+            Treadmill,steady,20,,,,,moderate,,,,Treadmill,Incline,2,,,,,,,,,,,Steady pace,
+            Outdoor Run,distance,,3,,,,moderate,,,,,,,,,,,,,,,,,,
+            Bike Sprints,intervals,,,30,60,8,hard,,,,Bike,Resistance,8,,,,,,,,,,,,
+            Jumping Jacks,calisthenics,,,,,,,30,3,single,,,,,,,,,,,,,,,
             """
         case .stretching:
             return """
-            exercise,hold_seconds,sides,rounds,notes,photo_url
-            Hamstring Stretch,30,2,3,Keep back flat,
-            Shoulder Stretch,20,2,2,,
-            Calf Stretch,30,2,3,,
+            exercise,kind,hold_seconds,reps,sets,per_side,per_side_custom,prop,timer_seconds,notes,photo_url
+            Hamstring Stretch,static,30,2,1,left_right,,strap,,Keep back flat,
+            Shoulder Stretch,static,20,1,2,left_right,,,,,
+            Leg Swings,dynamic,,10,1,forward_back,,,30,,
             """
         }
     }
@@ -112,7 +159,11 @@ struct CSVExerciseImporter {
     private struct Row {
         var name: String
         var machine: String = ""
-        var settings: [(label: String, numeric: Int?, other: String?)] = []
+        var settings: [Setting] = []
+        /// Machines after the row's own, from `extraMachines`.
+        var extraMachines: [MachineSpec] = []
+        /// Set when the row has a `kind`; then the older fields below are unused.
+        var fields: CSVExerciseFields?
         var notes: String = ""
         var photoURL: String = ""                      // optional web image to fetch
         var sets: [(reps: Int, weight: Double)] = []  // strength
@@ -123,18 +174,35 @@ struct CSVExerciseImporter {
         var rounds = 1
     }
 
-    func importText(_ text: String) throws -> CSVImportReport {
+    /// `extraMachines` is keyed by the exercise row's line number (2 = first data row).
+    func importText(_ text: String, extraMachines: [Int: [MachineSpec]] = [:]) throws -> CSVImportReport {
         let rows = CSVRoutineImporter.parse(text)
         guard let header = rows.first, !header.isEmpty else { throw CSVImportError.empty }
+
+        // A file's own ^ rows (more machines for the exercise above), read the
+        // same way as the Google Sheet's. Needs the kind column.
+        let headerNames = header.map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+        if extraMachines.isEmpty, headerNames.contains("kind"), let col = headerNames.firstIndex(of: "exercise"),
+           rows.dropFirst().contains(where: { col < $0.count && $0[col].trimmingCharacters(in: .whitespaces) == GoogleSheetImport.sameAsAbove }) {
+            let split = try GoogleSheetImport.splitMachineRows(text)
+            guard !split.csv.isEmpty else { throw CSVImportError.empty }
+            do {
+                return try importText(split.csv, extraMachines: split.machines)
+            } catch CSVImportError.invalidData(let errors) {
+                throw CSVImportError.invalidData(errors.map { GoogleSheetImport.relabel($0, origins: split.origins) })
+            }
+        }
 
         var index: [String: Int] = [:]
         for (i, name) in header.enumerated() {
             index[name.trimmingCharacters(in: .whitespaces).lowercased()] = i
         }
 
-        // Required columns per group.
+        // Required columns per group. With a `kind` column, each kind's own
+        // fields are optional (blank uses the kind's defaults).
         let required: [String]
         switch group {
+        case _ where index["kind"] != nil: required = ["exercise"]
         case .strength: required = ["exercise", "set1_reps", "set1_weight"]
         case .cardio: required = ["exercise", "duration_min", "intensity"]
         case .stretching: required = ["exercise"]
@@ -142,7 +210,11 @@ struct CSVExerciseImporter {
         let missing = required.filter { index[$0] == nil }
         guard missing.isEmpty else { throw CSVImportError.missingColumns(missing) }
 
-        let dataRows = rows.dropFirst().filter { !($0.count == 1 && $0[0].trimmingCharacters(in: .whitespaces).isEmpty) }
+        // Blank rows (",,," included) are skipped; each row keeps its file
+        // line number so errors name the right row.
+        let dataRows = rows.dropFirst().enumerated()
+            .filter { !$0.element.allSatisfy { $0.trimmingCharacters(in: .whitespaces).isEmpty } }
+            .map { (lineNo: $0.offset + 2, row: $0.element) }   // header is line 1
         guard !dataRows.isEmpty else { throw CSVImportError.empty }
 
         func field(_ row: [String], _ key: String) -> String {
@@ -152,31 +224,58 @@ struct CSVExerciseImporter {
 
         // How many setK_reps/setK_weight column pairs the header defines.
         var maxSet = 0
-        if group == .strength {
-            var n = 1
-            while index["set\(n)_reps"] != nil || index["set\(n)_weight"] != nil { maxSet = n; n += 1 }
-        }
+        var n = 1
+        while index["set\(n)_reps"] != nil || index["set\(n)_weight"] != nil { maxSet = n; n += 1 }
 
         // ---- PASS 1: validate everything. ----
         var errors: [String] = []
         var parsed: [Row] = []
+        var firstLine: [String: Int] = [:]   // exercise name → its first line (replace mode)
 
-        for (offset, rowFields) in dataRows.enumerated() {
-            let lineNo = offset + 2
+        for (lineNo, rowFields) in dataRows {
             var rowErrors: [String] = []
 
             let name = field(rowFields, "exercise")
             if name.isEmpty { rowErrors.append("Line \(lineNo): 'exercise' is required.") }
+            if name == GoogleSheetImport.sameAsAbove {
+                rowErrors.append("Line \(lineNo): a ^ row (another machine for the exercise above) needs a 'kind' column in the file.")
+            }
 
             var r = Row(name: name, notes: field(rowFields, "notes"))
             r.photoURL = field(rowFields, "photo_url")   // optional; downloaded after import
 
+            r.fields = CSVExerciseFields.parse({ field(rowFields, $0) }, group: group, lineNo: lineNo,
+                                               maxSet: maxSet, allowsSetColumns: false, errors: &rowErrors)
             if group != .stretching {
                 r.machine = field(rowFields, "machine")
-                r.settings = parseMachineSettings(rowFields, field: field, lineNo: lineNo, into: &rowErrors)
+                r.settings = Self.parseMachineSettings({ field(rowFields, $0) }, place: "Line \(lineNo)", into: &rowErrors)
+            }
+            // Overwriting with two definitions of one exercise would let row
+            // order pick the winner, so a repeat is an error. Only rows with a
+            // kind overwrite; older rows without one are still just skipped.
+            if replaceExisting, r.fields != nil, !name.isEmpty {
+                if let first = firstLine[name.lowercased()] {
+                    rowErrors.append("Line \(lineNo): \"\(name)\" is already defined on line \(first); each exercise needs one row.")
+                } else {
+                    firstLine[name.lowercased()] = lineNo
+                }
+            }
+            r.extraMachines = extraMachines[lineNo] ?? []
+            if !r.extraMachines.isEmpty {
+                if r.fields?.kind != .machine {
+                    rowErrors.append("Line \(lineNo): only a Machine exercise can have more than one machine.")
+                } else {
+                    let names = [r.machine.isEmpty ? r.name : r.machine] + r.extraMachines.map(\.name)
+                    var seen = Set<String>()
+                    for n in names where !seen.insert(n.lowercased()).inserted {
+                        rowErrors.append("Line \(lineNo): two of this exercise's machines are named \"\(n)\"; give each its own name.")
+                    }
+                }
             }
 
             switch group {
+            case _ where r.fields != nil || !field(rowFields, "kind").isEmpty:
+                break   // the kind's own columns were read above
             case .strength:
                 for i in 1...max(1, maxSet) {
                     let rs = field(rowFields, "set\(i)_reps"), ws = field(rowFields, "set\(i)_weight")
@@ -220,46 +319,72 @@ struct CSVExerciseImporter {
         guard errors.isEmpty else { throw CSVImportError.invalidData(errors) }
 
         // ---- PASS 2: create only NEW exercises; skip ones that already exist. ----
-        var machineByName: [String: Machine] = [:]
         var existingByKey: [String: Exercise] = [:]
+        // A CSV import is the user's own data: a demo exercise with the same
+        // name is not a match, so the user gets their own copy.
+        let user = DataSource.user.rawValue
         for e in (try? context.fetch(
-            FetchDescriptor<Exercise>(predicate: #Predicate { $0.deletedAt == nil })
+            FetchDescriptor<Exercise>(predicate: #Predicate { $0.deletedAt == nil && $0.sourceRaw == user })
         )) ?? [] {
             existingByKey["\(e.name)|\(e.defaultSectionType.rawValue)"] = e
         }
         var createdKeys = Set<String>()
         var report = CSVImportReport()
         var photoDownloads: [(id: UUID, raw: String)] = []   // exercises to fetch a photo_url for
+        var updated: [UUID] = []
 
         for r in parsed {
             let key = "\(r.name)|\(group.rawValue)"
+            if createdKeys.contains(key) { continue }                                // duplicate within this file
             if let existing = existingByKey[key] {
-                report.exercisesSkipped += 1                                          // already in library
-                // Re-import backfills a photo onto an existing exercise that has none.
-                if existing.photoData == nil, !r.photoURL.isEmpty {
+                createdKeys.insert(key)
+                if replaceExisting, let fields = r.fields {
+                    let before = definitionSignature(existing), stamp = existing.updatedAt
+                    replaceDefinition(of: existing, with: fields, row: r, hasNotesColumn: index["notes"] != nil)
+                    if definitionSignature(existing) == before {
+                        existing.updatedAt = stamp
+                        report.exercisesUnchanged += 1
+                    } else {
+                        updated.append(existing.id)
+                        report.exercisesUpdated += 1
+                    }
+                } else {
+                    report.exercisesSkipped += 1                                      // already in library
+                }
+                // Re-import fetches the row's photo again: it fills in a missing
+                // photo and replaces one whose image at the link has changed
+                // (downloadPhotos compares). A photo set in the app is left
+                // alone, as is a Machine exercise whose photo is on its machines.
+                if !r.photoURL.isEmpty, !existing.photoSetInApp,
+                   existing.photoData != nil || !hasMachinePhoto(existing) {
                     photoDownloads.append((existing.id, r.photoURL))
                 }
                 continue
             }
-            if createdKeys.contains(key) { continue }                                // duplicate within this file
+
+            if let fields = r.fields {
+                // A row with a kind: the kind's fields, its own machine, then the
+                // older fields routines and workouts still read.
+                let ex = Exercise(name: r.name, notes: r.notes, source: .user)
+                fields.apply(to: ex)
+                var machines: [Machine] = []
+                for spec in Self.machineSpecs(for: r, fields: fields) {
+                    let m = Self.makeMachine(named: spec.name, settings: spec.settings, context: context)
+                    m.weight = spec.weight
+                    machines.append(m)
+                }
+                ex.machineIds = machines.map(\.id)
+                context.insert(ex)
+                ExerciseLegacyFields.write(ex, machines: machines, context: context)
+                createdKeys.insert(key)
+                report.exercisesAdded += 1
+                if !r.photoURL.isEmpty { photoDownloads.append((ex.id, r.photoURL)) }
+                continue
+            }
 
             var machineId: UUID?
             if group != .stretching, !r.machine.isEmpty {
-                if let m = machineByName[r.machine] {
-                    machineId = m.id
-                } else {
-                    let m = Machine(name: r.machine, source: .user)
-                    context.insert(m)
-                    for (i, s) in r.settings.prefix(Machine.maxSettings).enumerated() {
-                        let def = MachineSettingDefinition(label: s.label, order: i,
-                                                           numericValue: s.numeric, otherText: s.other, source: .user)
-                        def.machine = m
-                        m.settingDefinitions.append(def)
-                        context.insert(def)
-                    }
-                    machineByName[r.machine] = m
-                    machineId = m.id
-                }
+                machineId = Self.makeMachine(named: r.machine, settings: r.settings, context: context).id
             }
 
             let ex = Exercise(name: r.name, machineId: machineId, notes: r.notes, source: .user)
@@ -288,18 +413,153 @@ struct CSVExerciseImporter {
             if !r.photoURL.isEmpty { photoDownloads.append((ex.id, r.photoURL)) }
         }
 
+        // Push replaced definitions into routines and workouts in progress
+        // (never into finished workouts).
+        let sync = CatalogSyncService(context)
+        for id in updated { sync.reconcileExercise(id) }
+
         Audit.log(context, type: "import.csv", entity: "Exercise",
                   summary: report.summary, source: .user)
-        try? context.save()
-        downloadPhotos(photoDownloads)   // fire-and-forget; photos appear once fetched
+        if saves {
+            try context.save()   // reported, not swallowed
+            downloadPhotos(photoDownloads)   // fire-and-forget; photos appear once fetched
+        } else {
+            report.photoDownloads = photoDownloads
+        }
         return report
+    }
+
+    /// Everything a sheet row sets on an exercise, so re-importing the same
+    /// values counts as unchanged rather than updated.
+    private func definitionSignature(_ e: Exercise) -> String {
+        let machines = e.machineIds.compactMap { id in
+            try? context.fetch(FetchDescriptor<Machine>(predicate: #Predicate { $0.id == id })).first
+        }
+        let machineIndex = Dictionary(machines.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var parts: [String] = [
+            e.kindRaw, e.notes, "\(e.reps)", "\(e.sets)", "\(e.perSide)", e.perSideCustom,
+            "\(e.weight as Any)", "\(e.implement as Any)", "\(e.addedWeight as Any)", e.prop,
+            "\(e.distance as Any)", "\(e.holdSeconds)", "\(e.countTimerSeconds)", "\(e.durationMinutes)",
+            "\(e.effort)", "\(e.workSeconds)", "\(e.recoverySeconds)", "\(e.rounds)", "\(e.varyBySet)"
+        ]
+        for m in machines {
+            parts.append("m:\(m.name)|\(m.weight as Any)|\(m.deletedAt == nil)")
+            for d in m.activeSettings.sorted(by: { $0.order < $1.order }) {
+                parts.append("s:\(d.label)|\(d.numericValue as Any)|\(d.otherText as Any)")
+            }
+        }
+        // Each machine numbers its own sets from 0, so sort by machine first.
+        let sets = e.defaultSets.map { (machine: $0.machineId.flatMap { machineIndex[$0] } ?? -1, set: $0) }
+            .sorted { ($0.machine, $0.set.order) < ($1.machine, $1.set.order) }
+        for (machine, d) in sets {
+            parts.append("d:\(machine)|\(d.order)|\(d.reps)|\(d.weight)")
+        }
+        return parts.joined(separator: "\u{1F}")
+    }
+
+    private func hasMachinePhoto(_ e: Exercise) -> Bool {
+        e.machineIds.contains { id in
+            (try? context.fetch(FetchDescriptor<Machine>(predicate: #Predicate { $0.id == id })).first?.photoData) != nil
+        }
+    }
+
+    /// The machines a kind row describes, default first: the row's own (named
+    /// after the exercise if it names none), then its extra machines.
+    private static func machineSpecs(for r: Row, fields: CSVExerciseFields) -> [MachineSpec] {
+        guard fields.needsMachine(named: r.machine) else { return [] }
+        let own = MachineSpec(name: r.machine.isEmpty ? r.name : r.machine,
+                              weight: fields.machineWeight,
+                              settings: CSVExerciseFields.settingKinds.contains(fields.kind) ? r.settings : [])
+        return [own] + (fields.kind == .machine ? r.extraMachines : [])
+    }
+
+    /// Overwrite an existing exercise's definition in place (same id, so
+    /// routines and history keep pointing at it). Its machines are matched by
+    /// name and updated; new names get new machines; machines no longer listed
+    /// are unlinked but kept, as history may reference them. Notes change only
+    /// when the import has a notes column. A photo is fetched only if it has none.
+    private func replaceDefinition(of ex: Exercise, with fields: CSVExerciseFields,
+                                   row r: Row, hasNotesColumn: Bool) {
+        fields.apply(to: ex)
+        if hasNotesColumn { ex.notes = r.notes }
+        ex.varyBySet = false   // the sheet's reps × sets replace any per-set plan
+        ex.updatedAt = .now
+
+        let current = ex.machineIds.compactMap { id in
+            try? context.fetch(FetchDescriptor<Machine>(predicate: #Predicate { $0.id == id })).first
+        }.filter { $0.deletedAt == nil }
+        var unused = current
+        var machines: [Machine] = []
+        for spec in Self.machineSpecs(for: r, fields: fields) {
+            let machine: Machine
+            if let i = unused.firstIndex(where: { $0.name.lowercased() == spec.name.lowercased() }) {
+                machine = unused.remove(at: i)
+                machine.name = spec.name
+                // Distance shows only the machine's name: its settings stay
+                // as they are, as the exercise editor does.
+                if fields.kind != .distance { Self.replaceSettings(of: machine, with: spec.settings, context: context) }
+            } else {
+                machine = Self.makeMachine(named: spec.name, settings: spec.settings, context: context)
+            }
+            machine.weight = spec.weight
+            machine.updatedAt = .now
+            machines.append(machine)
+        }
+        ex.machineIds = machines.map(\.id)
+        ExerciseLegacyFields.write(ex, machines: machines, context: context)
+    }
+
+    /// Set a machine's settings to `settings`. A definition with the same
+    /// label is updated in place (workouts in progress match settings by
+    /// definition id); new labels are added; the rest are soft-deleted.
+    static func replaceSettings(of machine: Machine, with settings: [Setting], context: ModelContext) {
+        var unused = machine.activeSettings
+        var kept = Set<UUID>()
+        for (i, s) in settings.prefix(Machine.maxSettings).enumerated() {
+            let def: MachineSettingDefinition
+            if let j = unused.firstIndex(where: { $0.label.lowercased() == s.label.lowercased() }) {
+                def = unused.remove(at: j)
+                def.label = s.label
+            } else {
+                def = MachineSettingDefinition(label: s.label, order: i, source: machine.source)
+                def.machine = machine
+                machine.settingDefinitions.append(def)
+                context.insert(def)
+            }
+            def.order = i
+            def.numericValue = s.numeric
+            def.otherText = s.other
+            def.updatedAt = .now
+            kept.insert(def.id)
+        }
+        for def in machine.settingDefinitions where def.deletedAt == nil && !kept.contains(def.id) {
+            def.deletedAt = .now
+            def.updatedAt = .now
+        }
+    }
+
+    /// A new machine with its settings. Each exercise gets its own (a machine
+    /// belongs to one exercise, even when two share a name).
+    static func makeMachine(named name: String,
+                            settings: [Setting],
+                            context: ModelContext) -> Machine {
+        let m = Machine(name: name, source: .user)
+        context.insert(m)
+        for (i, s) in settings.prefix(Machine.maxSettings).enumerated() {
+            let def = MachineSettingDefinition(label: s.label, order: i,
+                                               numericValue: s.numeric, otherText: s.other, source: .user)
+            def.machine = m
+            m.settingDefinitions.append(def)
+            context.insert(def)
+        }
+        return m
     }
 
     /// Download each linked photo off the main thread and store a LOCAL COPY of the
     /// bytes on its exercise (`photoData` = on-device storage). Best-effort: bad
     /// links / non-image responses are skipped. Raw bytes are kept so animated GIFs
     /// stay animated (see AnimatedImageView).
-    private func downloadPhotos(_ items: [(id: UUID, raw: String)]) {
+    func downloadPhotos(_ items: [(id: UUID, raw: String)]) {
         guard !items.isEmpty else { return }
         photoStatus?.begin(items.count)
         Task { @MainActor in
@@ -312,15 +572,25 @@ struct CSVExerciseImporter {
                 if let ex = try? context.fetch(
                     FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == id })
                 ).first {
-                    ex.photoData = data        // local copy, independent of the URL afterwards
-                    changed = true
-                    photoStatus?.recordSuccess()
+                    let result = Self.applyDownloadedPhoto(data, to: ex)
+                    if result != .unchanged { changed = true }
+                    photoStatus?.record(result)
                 } else {
                     photoStatus?.recordFailure()
                 }
             }
             if changed { try? context.save() }
         }
+    }
+
+    /// Store a downloaded photo on its exercise unless it's the same image it
+    /// already has, or the user set a photo in the app while it downloaded.
+    static func applyDownloadedPhoto(_ data: Data, to ex: Exercise) -> PhotoRefresh {
+        if ex.photoSetInApp || ex.photoData == data { return .unchanged }
+        let result: PhotoRefresh = ex.photoData == nil ? .added : .updated
+        ex.photoData = data            // local copy, independent of the URL afterwards
+        ex.updatedAt = .now
+        return result
     }
 
     /// Try each candidate direct-image URL until one returns valid image bytes.
@@ -364,20 +634,20 @@ struct CSVExerciseImporter {
     }
 
     /// Read settingK_label + settingK_value columns (K = 1...Machine.maxSettings) into settings.
-    private func parseMachineSettings(_ row: [String],
-                                      field: ([String], String) -> String,
-                                      lineNo: Int,
-                                      into errors: inout [String]) -> [(label: String, numeric: Int?, other: String?)] {
-        var out: [(label: String, numeric: Int?, other: String?)] = []
+    /// `place` starts each error ("Line 4", "Machine row 14").
+    static func parseMachineSettings(_ field: (String) -> String,
+                                     place: String,
+                                     into errors: inout [String]) -> [Setting] {
+        var out: [Setting] = []
         for i in 1...Machine.maxSettings {
-            let label = field(row, "setting\(i)_label")
-            let value = field(row, "setting\(i)_value")
+            let label = field("setting\(i)_label")
+            let value = field("setting\(i)_value")
             if label.isEmpty && value.isEmpty { continue }
             guard !label.isEmpty else {
-                errors.append("Line \(lineNo): setting\(i)_value has no setting\(i)_label.")
+                errors.append("\(place): setting\(i)_value has no setting\(i)_label.")
                 continue
             }
-            if let n = Int(value), (1...15).contains(n) {
+            if let n = Int(value), MachineSettingDefinition.valueRange.contains(n) {
                 out.append((label: label, numeric: n, other: nil))
             } else {
                 out.append((label: label, numeric: nil, other: value.isEmpty ? nil : value))

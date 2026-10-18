@@ -1,0 +1,1689 @@
+{
+  "corrections": [],
+  "exerciseDefaultSets": [
+    {
+      "exerciseId": "75C4E821-84FD-41CB-95D2-C9766D563AF7",
+      "id": "39A9B98C-BBD7-4935-9439-CD9F3297799D",
+      "order": 0,
+      "reps": 12,
+      "weight": 95
+    },
+    {
+      "exerciseId": "75C4E821-84FD-41CB-95D2-C9766D563AF7",
+      "id": "20453369-427E-45F5-9AD6-46D044982B34",
+      "order": 1,
+      "reps": 12,
+      "weight": 95
+    },
+    {
+      "exerciseId": "12CC1E52-6BF7-45B2-8674-14A62773FF63",
+      "id": "2ACFBCC5-16D2-4DF4-8458-B556D64F0BD5",
+      "order": 1,
+      "reps": 12,
+      "weight": 95
+    },
+    {
+      "exerciseId": "12CC1E52-6BF7-45B2-8674-14A62773FF63",
+      "id": "7F736779-71E3-402F-BE1A-FDF6666EA2D6",
+      "order": 0,
+      "reps": 12,
+      "weight": 95
+    },
+    {
+      "exerciseId": "A31EFAC1-1C02-458B-B42F-437E3C704659",
+      "id": "9C75BD95-E215-47F1-9295-41760F35830E",
+      "order": 0,
+      "reps": 12,
+      "weight": 75
+    },
+    {
+      "exerciseId": "A31EFAC1-1C02-458B-B42F-437E3C704659",
+      "id": "80979454-0756-4285-94A3-7C89BC06CDA6",
+      "order": 1,
+      "reps": 12,
+      "weight": 75
+    },
+    {
+      "exerciseId": "4423FD83-CF45-4D04-9C82-8DB184846694",
+      "id": "E5134BC2-4A23-4977-A553-BBC6848D22B0",
+      "order": 1,
+      "reps": 12,
+      "weight": 45
+    },
+    {
+      "exerciseId": "4423FD83-CF45-4D04-9C82-8DB184846694",
+      "id": "729F863A-C45E-45F7-83AC-061EDF907606",
+      "order": 0,
+      "reps": 12,
+      "weight": 45
+    },
+    {
+      "exerciseId": "15EC53BC-DC00-44AB-A608-AFFFD3F6CD18",
+      "id": "9D06C360-2CC2-4EC3-960A-CE1D87323FA4",
+      "order": 0,
+      "reps": 15,
+      "weight": 80
+    },
+    {
+      "exerciseId": "15EC53BC-DC00-44AB-A608-AFFFD3F6CD18",
+      "id": "230CEBD1-DDA8-4004-88FF-D56D22192F5E",
+      "order": 1,
+      "reps": 15,
+      "weight": 80
+    },
+    {
+      "exerciseId": "67276C5A-27B2-42DA-8CE2-A8430E374BF0",
+      "id": "4C925CF5-664C-42CD-A454-2CD5DD96D0DA",
+      "order": 0,
+      "reps": 15,
+      "weight": 115
+    },
+    {
+      "exerciseId": "67276C5A-27B2-42DA-8CE2-A8430E374BF0",
+      "id": "D3854D46-4A51-4C23-B82F-28EBF74482C9",
+      "order": 1,
+      "reps": 15,
+      "weight": 115
+    },
+    {
+      "exerciseId": "DC917C61-CA34-4A62-A64E-FBAA340F487C",
+      "id": "61100211-37FE-4186-A84C-3D93D7845E84",
+      "order": 0,
+      "reps": 12,
+      "weight": 80
+    },
+    {
+      "exerciseId": "DC917C61-CA34-4A62-A64E-FBAA340F487C",
+      "id": "570B5F59-4E71-487E-8285-A533C02D18BC",
+      "order": 1,
+      "reps": 12,
+      "weight": 80
+    },
+    {
+      "exerciseId": "AA3C669D-2923-42D8-BDD8-51087FA6F853",
+      "id": "7CA42527-E599-46BF-8489-E49D66F528AB",
+      "order": 1,
+      "reps": 15,
+      "weight": 80
+    },
+    {
+      "exerciseId": "AA3C669D-2923-42D8-BDD8-51087FA6F853",
+      "id": "ED04BBC3-659E-428D-9303-70CD19728088",
+      "order": 0,
+      "reps": 15,
+      "weight": 80
+    },
+    {
+      "exerciseId": "A773247A-0717-4C34-83E1-7B32FBB23CE2",
+      "id": "16DB06F3-527D-4998-8AF7-787F69A4028E",
+      "order": 0,
+      "reps": 12,
+      "weight": 110
+    },
+    {
+      "exerciseId": "A773247A-0717-4C34-83E1-7B32FBB23CE2",
+      "id": "39C1BB1C-FABA-40DF-B5E6-0E99558AE940",
+      "order": 1,
+      "reps": 12,
+      "weight": 110
+    },
+    {
+      "exerciseId": "47229A54-D2F5-4361-9BBB-052053E1D725",
+      "id": "CA8FE484-37F3-49C4-95D8-92DEF22AC87B",
+      "order": 1,
+      "reps": 12,
+      "weight": 85
+    },
+    {
+      "exerciseId": "47229A54-D2F5-4361-9BBB-052053E1D725",
+      "id": "4A0F86A6-65B9-40A5-A423-CAFA181F923F",
+      "order": 0,
+      "reps": 12,
+      "weight": 85
+    },
+    {
+      "exerciseId": "7FCC7848-321A-4A5D-AE06-DCB0494D5595",
+      "id": "63E850C4-C877-439B-A601-E80DE87ED6B0",
+      "order": 0,
+      "reps": 12,
+      "weight": 40
+    },
+    {
+      "exerciseId": "7FCC7848-321A-4A5D-AE06-DCB0494D5595",
+      "id": "C77F25D3-B2B4-4B4D-9DF6-0AF68289ECAC",
+      "order": 1,
+      "reps": 12,
+      "weight": 40
+    },
+    {
+      "exerciseId": "918D3776-2A34-4173-AF4E-53450DF03725",
+      "id": "DB481909-22A7-402F-9D8D-C46E01FF64BA",
+      "order": 0,
+      "reps": 8,
+      "weight": 5
+    }
+  ],
+  "exercises": [
+    {
+      "createdAt": "2026-07-05T18:26:23Z",
+      "defaultSection": "cardio",
+      "durationMinutes": 35,
+      "effort": "easy",
+      "holdSeconds": 30,
+      "id": "1F6586FA-6820-4780-87F3-F93D4D38A90B",
+      "intensity": "low",
+      "kind": "steady",
+      "machineId": "A762A622-88BF-4845-BE2A-A7730C1E6F95",
+      "name": "Optional Easy Elliptical Session",
+      "notes": "Optional Saturday session. Reduce resistance first if the left knee is sore.",
+      "rounds": 1,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:23Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:28Z",
+      "defaultSection": "stretching",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "C2F63D75-ABAE-494D-B6A0-6153683339FE",
+      "intensity": "moderate",
+      "kind": "staticStretch",
+      "name": "Standing Supported Low-Back Stretch",
+      "notes": "Hold a stable rail, counter, or bench. Soften knees, send hips back, and keep the stretch gentle.",
+      "perSide": "single",
+      "reps": 1,
+      "rounds": 1,
+      "sets": 1,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-07-10T22:56:04Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "defaultSection": "strength",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "75C4E821-84FD-41CB-95D2-C9766D563AF7",
+      "intensity": "moderate",
+      "kind": "machine",
+      "machineId": "BF4C1626-D6A7-45A1-BC46-053031625749",
+      "name": "Chest Press",
+      "notes": "",
+      "perSide": "single",
+      "reps": 12,
+      "rounds": 1,
+      "sets": 2,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-10-01T15:57:44Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:23Z",
+      "defaultSection": "cardio",
+      "durationMinutes": 10,
+      "effort": "moderate",
+      "holdSeconds": 30,
+      "id": "3535401B-64C5-456A-8F5A-1B1A91412231",
+      "intensity": "moderate",
+      "kind": "steady",
+      "machineId": "BEBEC88E-7D43-47F0-BC96-C7A627883A43",
+      "name": "Elliptical Warm-Up",
+      "notes": "Low effort warm-up. You should be able to talk comfortably. Keep resistance below your home cardio setting.",
+      "rounds": 1,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-07-06T16:53:56Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:28Z",
+      "defaultSection": "stretching",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "65683211-212C-4113-974D-8CB59733E534",
+      "intensity": "moderate",
+      "kind": "staticStretch",
+      "name": "Standing Hip Flexor Stretch",
+      "notes": "Tuck pelvis gently and squeeze rear glute. Avoid arching the low back.",
+      "perSide": "leftRight",
+      "reps": 1,
+      "rounds": 1,
+      "sets": 1,
+      "sides": 2,
+      "source": "seedDemo",
+      "updatedAt": "2026-07-20T17:04:12Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "defaultSection": "strength",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "12CC1E52-6BF7-45B2-8674-14A62773FF63",
+      "intensity": "moderate",
+      "kind": "machine",
+      "machineId": "C9FD51F2-8ACB-46BF-8D28-A8FB28027D96",
+      "name": "Seated Leg Extension",
+      "notes": "",
+      "perSide": "single",
+      "reps": 12,
+      "rounds": 1,
+      "sets": 2,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-10-01T15:47:09Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "defaultSection": "strength",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "A31EFAC1-1C02-458B-B42F-437E3C704659",
+      "intensity": "moderate",
+      "kind": "machine",
+      "machineId": "92AAA5F5-7292-41A8-8034-2EAAB109D131",
+      "name": "Seated Row",
+      "notes": "Pull toward torso with shoulders down and back. Record seat/chest-pad settings after first comfortable use. Starting load is set to 0 for import compatibility; replace with the first comfortable machine setting after your setup session.",
+      "perSide": "single",
+      "reps": 12,
+      "rounds": 1,
+      "sets": 2,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-09-28T16:31:11Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "defaultSection": "strength",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "4423FD83-CF45-4D04-9C82-8DB184846694",
+      "intensity": "moderate",
+      "kind": "machine",
+      "machineId": "55C3DFB7-01FE-4FB7-BC7A-CF20BDC2603D",
+      "name": "Shoulder Press",
+      "notes": "8/8 - left shoulder seems better\nLeft shoulder pain 7/5/26, 7/15\n\n\n",
+      "perSide": "single",
+      "reps": 12,
+      "rounds": 1,
+      "sets": 2,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-09-28T16:20:31Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:28Z",
+      "defaultSection": "stretching",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "E9BDEE97-8BC3-4F1F-BA0B-B6C195D541BE",
+      "intensity": "moderate",
+      "kind": "staticStretch",
+      "name": "Standing Chest Opener (Hands Behind Head)",
+      "notes": "Stand tall with fingertips lightly behind your head and elbows wide. Gently draw shoulder blades together and lift the chest without arching your lower back. Keep the motion pain-free.",
+      "perSide": "single",
+      "reps": 1,
+      "rounds": 1,
+      "sets": 1,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-09-11T22:09:35Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "defaultSection": "strength",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "15EC53BC-DC00-44AB-A608-AFFFD3F6CD18",
+      "intensity": "moderate",
+      "kind": "machine",
+      "machineId": "C41EE27E-BBEA-4606-A940-B1512F1BB639",
+      "name": "Abdominal Machine",
+      "notes": "",
+      "perSide": "single",
+      "reps": 15,
+      "rounds": 1,
+      "sets": 2,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-10-01T16:13:48Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:37Z",
+      "defaultSection": "stretching",
+      "durationMinutes": 20,
+      "holdSeconds": 5,
+      "id": "1F6C2495-A2C5-4403-A3D9-75F3A5FE92C0",
+      "intensity": "moderate",
+      "kind": "staticStretch",
+      "name": "Ankle Rocks",
+      "notes": "Dynamic mobility: complete about 10 controlled ankle rocks per side during the 30-second interval.",
+      "perSide": "leftRight",
+      "reps": 10,
+      "rounds": 10,
+      "sets": 1,
+      "sides": 2,
+      "source": "seedDemo",
+      "updatedAt": "2026-07-06T16:48:34Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:28Z",
+      "defaultSection": "stretching",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "3804A191-CA60-4274-AB8F-03A9BB374A5F",
+      "intensity": "moderate",
+      "kind": "staticStretch",
+      "name": "Standing Shoulder/Lat Stretch",
+      "notes": "Keep ribs down and avoid pulling hard on the arm.",
+      "perSide": "leftRight",
+      "reps": 1,
+      "rounds": 1,
+      "sets": 1,
+      "sides": 2,
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:28Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:37Z",
+      "defaultSection": "stretching",
+      "durationMinutes": 20,
+      "holdSeconds": 0,
+      "id": "7267F2F0-A1A4-44C2-AF80-F40559DCD4A3",
+      "intensity": "moderate",
+      "kind": "dynamicStretch",
+      "name": "Shoulder Circles",
+      "notes": "Dynamic mobility: complete 10 forward and 10 backward shoulder circles during the interval.",
+      "perSide": "leftRight",
+      "reps": 15,
+      "rounds": 15,
+      "sets": 1,
+      "sides": 2,
+      "source": "seedDemo",
+      "updatedAt": "2026-07-17T18:29:37Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "defaultSection": "strength",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "67276C5A-27B2-42DA-8CE2-A8430E374BF0",
+      "intensity": "moderate",
+      "kind": "machine",
+      "machineId": "A2CD16F4-E7D1-40DF-950C-AB646EE3D021",
+      "name": "Back Extension",
+      "notes": "",
+      "perSide": "single",
+      "reps": 15,
+      "rounds": 1,
+      "sets": 2,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-10-01T16:01:50Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "defaultSection": "strength",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "DC917C61-CA34-4A62-A64E-FBAA340F487C",
+      "intensity": "moderate",
+      "kind": "machine",
+      "machineId": "316CFF07-5D44-44B3-9C31-E27229BCD63B",
+      "name": "Seated Leg Curl",
+      "notes": "",
+      "perSide": "single",
+      "reps": 12,
+      "rounds": 1,
+      "sets": 2,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-10-01T15:50:39Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "defaultSection": "strength",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "AA3C669D-2923-42D8-BDD8-51087FA6F853",
+      "intensity": "moderate",
+      "kind": "machine",
+      "machineId": "8F3A5D05-23E8-43DD-9255-E1045D2D7082",
+      "name": "Hip Abduction",
+      "notes": "Keep back against pad. Press outward with control; pause briefly and return slowly. Starting load is set to 0 for import compatibility; replace with the first comfortable machine setting after your setup session.",
+      "perSide": "single",
+      "reps": 15,
+      "rounds": 1,
+      "sets": 2,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-10-01T15:53:55Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:15Z",
+      "defaultSection": "strength",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "A773247A-0717-4C34-83E1-7B32FBB23CE2",
+      "intensity": "moderate",
+      "kind": "machine",
+      "machineId": "8C16A960-763A-469C-97B4-D4BD8224490A",
+      "name": "Seated Leg Press",
+      "notes": "",
+      "perSide": "single",
+      "reps": 12,
+      "rounds": 1,
+      "sets": 2,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-09-28T16:10:15Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:28Z",
+      "defaultSection": "stretching",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "160572AA-BD71-4FCF-B077-78F84F96B729",
+      "intensity": "moderate",
+      "kind": "staticStretch",
+      "name": "Standing Hamstring Stretch",
+      "notes": "Hinge gently from hips with a long back; do not force the range.",
+      "perSide": "leftRight",
+      "reps": 1,
+      "rounds": 1,
+      "sets": 1,
+      "sides": 2,
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:28Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:37Z",
+      "defaultSection": "stretching",
+      "durationMinutes": 20,
+      "holdSeconds": 0,
+      "id": "8937843F-E1C8-43D2-9FDF-74112B934CC9",
+      "intensity": "moderate",
+      "kind": "dynamicStretch",
+      "name": "Standing Hip Circles",
+      "notes": "Dynamic mobility: complete about 8 controlled hip circles in each direction per side.",
+      "perSide": "leftRight",
+      "reps": 8,
+      "rounds": 8,
+      "sets": 1,
+      "sides": 2,
+      "source": "seedDemo",
+      "updatedAt": "2026-07-06T16:49:44Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:37Z",
+      "defaultSection": "stretching",
+      "durationMinutes": 20,
+      "holdSeconds": 0,
+      "id": "96FA1556-48CD-4700-8A43-2B507684BBF5",
+      "intensity": "moderate",
+      "kind": "dynamicStretch",
+      "name": "Standing Torso Turns",
+      "notes": "Dynamic mobility: complete about 8 gentle torso turns per side during the interval.",
+      "perSide": "leftRight",
+      "reps": 8,
+      "rounds": 8,
+      "sets": 1,
+      "sides": 2,
+      "source": "seedDemo",
+      "updatedAt": "2026-07-06T16:50:16Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:28Z",
+      "defaultSection": "stretching",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "7DD7DF60-A65B-4697-8476-79F6ECDC849F",
+      "intensity": "moderate",
+      "kind": "staticStretch",
+      "name": "Standing Calf Stretch",
+      "notes": "Keep heel down and knee comfortably straight or softly bent.",
+      "perSide": "leftRight",
+      "reps": 1,
+      "rounds": 1,
+      "sets": 1,
+      "sides": 2,
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:28Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:23Z",
+      "defaultSection": "cardio",
+      "durationMinutes": 40,
+      "effort": "moderate",
+      "holdSeconds": 30,
+      "id": "52D5D2B3-F8FC-448E-A206-8E4A41228EEE",
+      "intensity": "moderate",
+      "kind": "steady",
+      "machineId": "A762A622-88BF-4845-BE2A-A7730C1E6F95",
+      "name": "Home Elliptical Steady Session",
+      "notes": "Steady sustainable session at medium resistance. You should be able to speak in short sentences.",
+      "rounds": 1,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:23Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "defaultSection": "strength",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "47229A54-D2F5-4361-9BBB-052053E1D725",
+      "intensity": "moderate",
+      "kind": "machine",
+      "machineId": "28D7B47F-63D3-40CE-BD04-3E9C41687B03",
+      "name": "Pull Down",
+      "notes": "Set thigh pad snugly. Pull toward upper chest, not behind neck. Starting load is set to 0 for import compatibility; replace with the first comfortable machine setting after your setup session.",
+      "perSide": "single",
+      "reps": 12,
+      "rounds": 1,
+      "sets": 2,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-10-01T16:05:24Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "defaultSection": "strength",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "7FCC7848-321A-4A5D-AE06-DCB0494D5595",
+      "intensity": "moderate",
+      "kind": "machine",
+      "machineId": "398DEF8B-4DB4-4648-B4E1-98B82F9E949E",
+      "name": "Rear Delt Fly",
+      "notes": "Use rear-delt position only. Keep load light and avoid shrugging. Starting load is set to 0 for import compatibility; replace with the first comfortable machine setting after your setup session.",
+      "perSide": "single",
+      "reps": 12,
+      "rounds": 1,
+      "sets": 2,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-10-01T16:11:03Z"
+    },
+    {
+      "addedWeight": 5,
+      "createdAt": "2026-07-05T18:26:37Z",
+      "defaultSection": "strength",
+      "durationMinutes": 20,
+      "holdSeconds": 30,
+      "id": "918D3776-2A34-4173-AF4E-53450DF03725",
+      "intensity": "moderate",
+      "kind": "bodyweight",
+      "machineId": "A426C6E2-0716-4A6E-8DA4-6926B04E5C20",
+      "name": "Sit-to-Stands",
+      "notes": "Bodyweight warm-up. Rise from a stable bench or chair with controlled form.",
+      "perSide": "single",
+      "reps": 8,
+      "rounds": 1,
+      "sets": 1,
+      "sides": 1,
+      "source": "seedDemo",
+      "updatedAt": "2026-10-01T15:44:12Z"
+    }
+  ],
+  "exportedAt": "2026-10-07T18:45:22Z",
+  "formatVersion": 4,
+  "locations": [],
+  "machines": [
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "id": "55C3DFB7-01FE-4FB7-BC7A-CF20BDC2603D",
+      "name": "Shoulder Press",
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:16Z",
+      "weight": 45
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "id": "8F3A5D05-23E8-43DD-9255-E1045D2D7082",
+      "name": "Abduction",
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:16Z",
+      "weight": 80
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "id": "316CFF07-5D44-44B3-9C31-E27229BCD63B",
+      "name": "Seated Leg Curl",
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:16Z",
+      "weight": 80
+    },
+    {
+      "createdAt": "2026-07-05T18:26:37Z",
+      "id": "A426C6E2-0716-4A6E-8DA4-6926B04E5C20",
+      "name": "Bodyweight",
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:37Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:23Z",
+      "id": "BEBEC88E-7D43-47F0-BC96-C7A627883A43",
+      "name": "Elliptical",
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:23Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "id": "92AAA5F5-7292-41A8-8034-2EAAB109D131",
+      "name": "Seated Row",
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:16Z",
+      "weight": 75
+    },
+    {
+      "createdAt": "2026-07-05T18:26:23Z",
+      "id": "A762A622-88BF-4845-BE2A-A7730C1E6F95",
+      "name": "Home Elliptical",
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:23Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "id": "C9FD51F2-8ACB-46BF-8D28-A8FB28027D96",
+      "name": "Seated Leg Extension",
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:16Z",
+      "weight": 95
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "id": "28D7B47F-63D3-40CE-BD04-3E9C41687B03",
+      "name": "Pull Down",
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:16Z",
+      "weight": 85
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "id": "398DEF8B-4DB4-4648-B4E1-98B82F9E949E",
+      "name": "Fly/Rear Delt",
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:16Z",
+      "weight": 40
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "id": "BF4C1626-D6A7-45A1-BC46-053031625749",
+      "name": "Chest Press",
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:16Z",
+      "weight": 95
+    },
+    {
+      "createdAt": "2026-07-05T18:26:15Z",
+      "id": "8C16A960-763A-469C-97B4-D4BD8224490A",
+      "name": "Seated Leg Press",
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:15Z",
+      "weight": 110
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "id": "A2CD16F4-E7D1-40DF-950C-AB646EE3D021",
+      "name": "Back Extension",
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:16Z",
+      "weight": 115
+    },
+    {
+      "createdAt": "2026-07-05T18:26:16Z",
+      "id": "C41EE27E-BBEA-4606-A940-B1512F1BB639",
+      "name": "Abdominal",
+      "source": "seedDemo",
+      "updatedAt": "2026-07-05T18:26:16Z",
+      "weight": 80
+    }
+  ],
+  "routineExercises": [
+    {
+      "displayName": "Back Extension",
+      "exerciseId": "67276C5A-27B2-42DA-8CE2-A8430E374BF0",
+      "id": "13D5F662-2B8F-451C-B3AC-F15D54CD777B",
+      "machineId": "A2CD16F4-E7D1-40DF-950C-AB646EE3D021",
+      "notes": "",
+      "order": 8,
+      "plannedReps": 15,
+      "plannedWeight": 115,
+      "restBetweenSets": 90,
+      "sectionId": "B243CFA5-3B02-46C3-B641-1443EE78A441",
+      "setCount": 2
+    },
+    {
+      "displayName": "Seated Leg Curl",
+      "exerciseId": "DC917C61-CA34-4A62-A64E-FBAA340F487C",
+      "id": "2EFDED7C-B90C-4BAF-9441-606D86CEA8BA",
+      "machineId": "316CFF07-5D44-44B3-9C31-E27229BCD63B",
+      "notes": "",
+      "order": 2,
+      "plannedReps": 12,
+      "plannedWeight": 80,
+      "restBetweenSets": 90,
+      "sectionId": "B243CFA5-3B02-46C3-B641-1443EE78A441",
+      "setCount": 2
+    },
+    {
+      "displayName": "Chest Press",
+      "exerciseId": "75C4E821-84FD-41CB-95D2-C9766D563AF7",
+      "id": "2247A45F-AE0E-4B80-BE36-A73FA9FFEFF9",
+      "machineId": "BF4C1626-D6A7-45A1-BC46-053031625749",
+      "notes": "",
+      "order": 4,
+      "plannedReps": 12,
+      "plannedWeight": 95,
+      "restBetweenSets": 90,
+      "sectionId": "B243CFA5-3B02-46C3-B641-1443EE78A441",
+      "setCount": 2
+    },
+    {
+      "displayName": "Seated Row",
+      "exerciseId": "A31EFAC1-1C02-458B-B42F-437E3C704659",
+      "id": "8242A16A-05DD-4AD9-BCD3-C94BC96B57C1",
+      "machineId": "92AAA5F5-7292-41A8-8034-2EAAB109D131",
+      "notes": "Pull toward torso with shoulders down and back. Record seat/chest-pad settings after first comfortable use. Starting load is set to 0 for import compatibility; replace with the first comfortable machine setting after your setup session.",
+      "order": 5,
+      "plannedReps": 12,
+      "plannedWeight": 75,
+      "restBetweenSets": 90,
+      "sectionId": "B243CFA5-3B02-46C3-B641-1443EE78A441",
+      "setCount": 2
+    },
+    {
+      "displayName": "Abdominal Machine",
+      "exerciseId": "15EC53BC-DC00-44AB-A608-AFFFD3F6CD18",
+      "id": "C21D3438-DDDB-48A7-8DFA-23545D64E630",
+      "machineId": "C41EE27E-BBEA-4606-A940-B1512F1BB639",
+      "notes": "",
+      "order": 7,
+      "plannedReps": 15,
+      "plannedWeight": 80,
+      "restBetweenSets": 90,
+      "sectionId": "B243CFA5-3B02-46C3-B641-1443EE78A441",
+      "setCount": 2
+    },
+    {
+      "displayName": "Shoulder Press",
+      "exerciseId": "4423FD83-CF45-4D04-9C82-8DB184846694",
+      "id": "1861014A-F524-435F-B0A9-D5F2E1A3C2C4",
+      "machineId": "55C3DFB7-01FE-4FB7-BC7A-CF20BDC2603D",
+      "notes": "8/8 - left shoulder seems better\nLeft shoulder pain 7/5/26, 7/15\n\n\n",
+      "order": 6,
+      "plannedReps": 12,
+      "plannedWeight": 45,
+      "restBetweenSets": 90,
+      "sectionId": "B243CFA5-3B02-46C3-B641-1443EE78A441",
+      "setCount": 2
+    },
+    {
+      "displayName": "Hip Abduction",
+      "exerciseId": "AA3C669D-2923-42D8-BDD8-51087FA6F853",
+      "id": "D14C1F9D-9147-4147-9810-41E121080B2E",
+      "machineId": "8F3A5D05-23E8-43DD-9255-E1045D2D7082",
+      "notes": "Keep back against pad. Press outward with control; pause briefly and return slowly. Starting load is set to 0 for import compatibility; replace with the first comfortable machine setting after your setup session.",
+      "order": 3,
+      "plannedReps": 12,
+      "plannedWeight": 50,
+      "restBetweenSets": 90,
+      "sectionId": "B243CFA5-3B02-46C3-B641-1443EE78A441",
+      "setCount": 2
+    },
+    {
+      "displayName": "Seated Leg Press",
+      "exerciseId": "A773247A-0717-4C34-83E1-7B32FBB23CE2",
+      "id": "B4DAA45F-A6E8-4929-B8F0-7B73546C27BB",
+      "machineId": "8C16A960-763A-469C-97B4-D4BD8224490A",
+      "notes": "",
+      "order": 1,
+      "plannedReps": 12,
+      "plannedWeight": 110,
+      "restBetweenSets": 90,
+      "sectionId": "B243CFA5-3B02-46C3-B641-1443EE78A441",
+      "setCount": 2
+    },
+    {
+      "displayName": "Standing Supported Low-Back Stretch",
+      "exerciseId": "C2F63D75-ABAE-494D-B6A0-6153683339FE",
+      "id": "BAC5C0DC-580E-445D-B463-1A057F0978AF",
+      "notes": "Hold a stable rail, counter, or bench. Soften knees, send hips back, and keep the stretch gentle.",
+      "order": 9,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 60,
+      "sectionId": "9E475289-E67B-45D7-BE23-84643356F5C8",
+      "setCount": 0
+    },
+    {
+      "displayName": "Standing Hip Circles",
+      "exerciseId": "8937843F-E1C8-43D2-9FDF-74112B934CC9",
+      "id": "4F91254B-BE2E-4F59-B976-9B3887038F02",
+      "notes": "Dynamic mobility: complete about 8 controlled hip circles in each direction per side.",
+      "order": 1,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "9E475289-E67B-45D7-BE23-84643356F5C8",
+      "setCount": 0
+    },
+    {
+      "displayName": "Standing Calf Stretch",
+      "exerciseId": "7DD7DF60-A65B-4697-8476-79F6ECDC849F",
+      "id": "2E6C9D36-3744-43A5-90A7-6976389475A4",
+      "notes": "Keep heel down and knee comfortably straight or softly bent.",
+      "order": 6,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "9E475289-E67B-45D7-BE23-84643356F5C8",
+      "setCount": 0
+    },
+    {
+      "displayName": "Standing Chest Opener (Hands Behind Head)",
+      "exerciseId": "E9BDEE97-8BC3-4F1F-BA0B-B6C195D541BE",
+      "id": "68646EB3-5763-455F-A8B6-A6C0061C7FD9",
+      "notes": "Stand tall with fingertips lightly behind your head and elbows wide. Gently draw shoulder blades together and lift the chest without arching your lower back. Keep the motion pain-free.",
+      "order": 7,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "9E475289-E67B-45D7-BE23-84643356F5C8",
+      "setCount": 0
+    },
+    {
+      "displayName": "Standing Torso Turns",
+      "exerciseId": "96FA1556-48CD-4700-8A43-2B507684BBF5",
+      "id": "D49D4790-29AA-48D2-9ED5-064251DDB4E7",
+      "notes": "Dynamic mobility: complete about 8 gentle torso turns per side during the interval.",
+      "order": 3,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "9E475289-E67B-45D7-BE23-84643356F5C8",
+      "setCount": 0
+    },
+    {
+      "displayName": "Shoulder Circles",
+      "exerciseId": "7267F2F0-A1A4-44C2-AF80-F40559DCD4A3",
+      "id": "DF66E33F-2B33-4B16-9FB7-9A4C7A260492",
+      "notes": "Dynamic mobility: complete 10 forward and 10 backward shoulder circles during the interval.",
+      "order": 2,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "9E475289-E67B-45D7-BE23-84643356F5C8",
+      "setCount": 0
+    },
+    {
+      "displayName": "Ankle Rocks",
+      "exerciseId": "1F6C2495-A2C5-4403-A3D9-75F3A5FE92C0",
+      "id": "1D8C046D-33CA-41E2-ABA8-C1A47C4A928D",
+      "notes": "Dynamic mobility: complete about 10 controlled ankle rocks per side during the 30-second interval.",
+      "order": 0,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "9E475289-E67B-45D7-BE23-84643356F5C8",
+      "setCount": 0
+    },
+    {
+      "displayName": "Standing Hamstring Stretch",
+      "exerciseId": "160572AA-BD71-4FCF-B077-78F84F96B729",
+      "id": "08F2F6DA-D492-4C1F-968D-056D91EEE320",
+      "notes": "Hinge gently from hips with a long back; do not force the range.",
+      "order": 4,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "9E475289-E67B-45D7-BE23-84643356F5C8",
+      "setCount": 0
+    },
+    {
+      "displayName": "Standing Shoulder/Lat Stretch",
+      "exerciseId": "3804A191-CA60-4274-AB8F-03A9BB374A5F",
+      "id": "C15BF007-9175-4225-9339-29DFD77D139C",
+      "notes": "Keep ribs down and avoid pulling hard on the arm.",
+      "order": 8,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "9E475289-E67B-45D7-BE23-84643356F5C8",
+      "setCount": 0
+    },
+    {
+      "displayName": "Elliptical Warm-Up",
+      "exerciseId": "3535401B-64C5-456A-8F5A-1B1A91412231",
+      "id": "5BEA3CF1-9D18-4857-B260-E05180E5BEAE",
+      "machineId": "BEBEC88E-7D43-47F0-BC96-C7A627883A43",
+      "notes": "Low effort warm-up. You should be able to talk comfortably. Keep resistance below your home cardio setting.",
+      "order": 0,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "5C5D5E40-4978-4CFB-AFCC-3F54D2DBD19B",
+      "setCount": 0
+    },
+    {
+      "displayName": "Standing Hip Circles",
+      "exerciseId": "8937843F-E1C8-43D2-9FDF-74112B934CC9",
+      "id": "B407B380-3052-49D0-BE52-32987900DD18",
+      "notes": "Dynamic mobility: complete about 8 controlled hip circles in each direction per side.",
+      "order": 1,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "5ABE04B3-7A72-4D28-9DAC-CFF5113331E5",
+      "setCount": 0
+    },
+    {
+      "displayName": "Standing Supported Low-Back Stretch",
+      "exerciseId": "C2F63D75-ABAE-494D-B6A0-6153683339FE",
+      "id": "1BD4A1B8-5509-41C1-9226-A678B4DBA6B7",
+      "notes": "Hold a stable rail, counter, or bench. Soften knees, send hips back, and keep the stretch gentle.",
+      "order": 9,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 60,
+      "sectionId": "5ABE04B3-7A72-4D28-9DAC-CFF5113331E5",
+      "setCount": 0
+    },
+    {
+      "displayName": "Standing Torso Turns",
+      "exerciseId": "96FA1556-48CD-4700-8A43-2B507684BBF5",
+      "id": "2D505B45-6DFC-4C4F-AEE6-6C107D71C9FA",
+      "notes": "Dynamic mobility: complete about 8 gentle torso turns per side during the interval.",
+      "order": 3,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "5ABE04B3-7A72-4D28-9DAC-CFF5113331E5",
+      "setCount": 0
+    },
+    {
+      "displayName": "Standing Chest Opener (Hands Behind Head)",
+      "exerciseId": "E9BDEE97-8BC3-4F1F-BA0B-B6C195D541BE",
+      "id": "86E84414-1FF1-4089-A61A-950360244BA3",
+      "notes": "Stand tall with fingertips lightly behind your head and elbows wide. Gently draw shoulder blades together and lift the chest without arching your lower back. Keep the motion pain-free.",
+      "order": 7,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "5ABE04B3-7A72-4D28-9DAC-CFF5113331E5",
+      "setCount": 0
+    },
+    {
+      "displayName": "Standing Hip Flexor Stretch",
+      "exerciseId": "65683211-212C-4113-974D-8CB59733E534",
+      "id": "4A6F1913-EE3A-41EE-9225-E6AC4D2A8034",
+      "notes": "Tuck pelvis gently and squeeze rear glute. Avoid arching the low back.",
+      "order": 5,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "5ABE04B3-7A72-4D28-9DAC-CFF5113331E5",
+      "setCount": 0
+    },
+    {
+      "displayName": "Standing Shoulder/Lat Stretch",
+      "exerciseId": "3804A191-CA60-4274-AB8F-03A9BB374A5F",
+      "id": "D78C0434-6D2F-40B5-99F5-59076F9BC3F9",
+      "notes": "Keep ribs down and avoid pulling hard on the arm.",
+      "order": 8,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "5ABE04B3-7A72-4D28-9DAC-CFF5113331E5",
+      "setCount": 0
+    },
+    {
+      "displayName": "Ankle Rocks",
+      "exerciseId": "1F6C2495-A2C5-4403-A3D9-75F3A5FE92C0",
+      "id": "C1C52201-60F4-4E52-9DEC-62175CF00613",
+      "notes": "Dynamic mobility: complete about 10 controlled ankle rocks per side during the 30-second interval.",
+      "order": 0,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "5ABE04B3-7A72-4D28-9DAC-CFF5113331E5",
+      "setCount": 0
+    },
+    {
+      "displayName": "Standing Calf Stretch",
+      "exerciseId": "7DD7DF60-A65B-4697-8476-79F6ECDC849F",
+      "id": "BA56037A-0515-4834-8E7D-8A2253801DAC",
+      "notes": "Keep heel down and knee comfortably straight or softly bent.",
+      "order": 6,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "5ABE04B3-7A72-4D28-9DAC-CFF5113331E5",
+      "setCount": 0
+    },
+    {
+      "displayName": "Shoulder Circles",
+      "exerciseId": "7267F2F0-A1A4-44C2-AF80-F40559DCD4A3",
+      "id": "4EBC0948-8388-41B7-8373-49088AB8448E",
+      "notes": "Dynamic mobility: complete 10 forward and 10 backward shoulder circles during the interval.",
+      "order": 2,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "5ABE04B3-7A72-4D28-9DAC-CFF5113331E5",
+      "setCount": 0
+    },
+    {
+      "displayName": "Standing Hamstring Stretch",
+      "exerciseId": "160572AA-BD71-4FCF-B077-78F84F96B729",
+      "id": "0F3F0CFD-914E-4FC1-87AC-BCA5E8C99AB1",
+      "notes": "Hinge gently from hips with a long back; do not force the range.",
+      "order": 4,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "5ABE04B3-7A72-4D28-9DAC-CFF5113331E5",
+      "setCount": 0
+    },
+    {
+      "displayName": "Rear Delt Fly",
+      "exerciseId": "7FCC7848-321A-4A5D-AE06-DCB0494D5595",
+      "id": "D1297AFA-D61F-4D6F-A98D-130DDA47F493",
+      "machineId": "398DEF8B-4DB4-4648-B4E1-98B82F9E949E",
+      "notes": "Use rear-delt position only. Keep load light and avoid shrugging. Starting load is set to 0 for import compatibility; replace with the first comfortable machine setting after your setup session.",
+      "order": 6,
+      "plannedReps": 12,
+      "plannedWeight": 40,
+      "restBetweenSets": 90,
+      "sectionId": "7F352627-0765-4A72-BFE7-8B510E56F4B9",
+      "setCount": 2
+    },
+    {
+      "displayName": "Hip Abduction",
+      "exerciseId": "AA3C669D-2923-42D8-BDD8-51087FA6F853",
+      "id": "66973C89-7CAF-4E67-8B7D-E7EFB48FD60B",
+      "machineId": "8F3A5D05-23E8-43DD-9255-E1045D2D7082",
+      "notes": "Keep back against pad. Press outward with control; pause briefly and return slowly. Starting load is set to 0 for import compatibility; replace with the first comfortable machine setting after your setup session.",
+      "order": 3,
+      "plannedReps": 12,
+      "plannedWeight": 50,
+      "restBetweenSets": 90,
+      "sectionId": "7F352627-0765-4A72-BFE7-8B510E56F4B9",
+      "setCount": 2
+    },
+    {
+      "displayName": "Pull Down",
+      "exerciseId": "47229A54-D2F5-4361-9BBB-052053E1D725",
+      "id": "BEA00210-A5D6-431B-9389-05A02A7DC268",
+      "machineId": "28D7B47F-63D3-40CE-BD04-3E9C41687B03",
+      "notes": "Set thigh pad snugly. Pull toward upper chest, not behind neck. Starting load is set to 0 for import compatibility; replace with the first comfortable machine setting after your setup session.",
+      "order": 5,
+      "plannedReps": 12,
+      "plannedWeight": 85,
+      "restBetweenSets": 90,
+      "sectionId": "7F352627-0765-4A72-BFE7-8B510E56F4B9",
+      "setCount": 2
+    },
+    {
+      "displayName": "Seated Leg Curl",
+      "exerciseId": "DC917C61-CA34-4A62-A64E-FBAA340F487C",
+      "id": "2025C7F1-BA10-4491-B87C-F30ABCDCA7FA",
+      "machineId": "316CFF07-5D44-44B3-9C31-E27229BCD63B",
+      "notes": "",
+      "order": 2,
+      "plannedReps": 12,
+      "plannedWeight": 80,
+      "restBetweenSets": 90,
+      "sectionId": "7F352627-0765-4A72-BFE7-8B510E56F4B9",
+      "setCount": 2
+    },
+    {
+      "displayName": "Seated Leg Extension",
+      "exerciseId": "12CC1E52-6BF7-45B2-8674-14A62773FF63",
+      "id": "E4D49D67-7083-4351-B08D-C15714C8B075",
+      "machineId": "C9FD51F2-8ACB-46BF-8D28-A8FB28027D96",
+      "notes": "",
+      "order": 1,
+      "plannedReps": 12,
+      "plannedWeight": 95,
+      "restBetweenSets": 90,
+      "sectionId": "7F352627-0765-4A72-BFE7-8B510E56F4B9",
+      "setCount": 2
+    },
+    {
+      "displayName": "Sit-to-Stands",
+      "exerciseId": "918D3776-2A34-4173-AF4E-53450DF03725",
+      "id": "185ABC2E-1764-43EB-81AB-5BDFB155C0C2",
+      "machineId": "A426C6E2-0716-4A6E-8DA4-6926B04E5C20",
+      "notes": "Bodyweight warm-up. Rise from a stable bench or chair with controlled form.",
+      "order": 0,
+      "plannedReps": 8,
+      "plannedWeight": 5,
+      "restBetweenSets": 90,
+      "sectionId": "7F352627-0765-4A72-BFE7-8B510E56F4B9",
+      "setCount": 1
+    },
+    {
+      "displayName": "Abdominal Machine",
+      "exerciseId": "15EC53BC-DC00-44AB-A608-AFFFD3F6CD18",
+      "id": "D2EACD5A-6BE1-4B7E-9075-7C78B4CDAD32",
+      "machineId": "C41EE27E-BBEA-4606-A940-B1512F1BB639",
+      "notes": "",
+      "order": 7,
+      "plannedReps": 15,
+      "plannedWeight": 80,
+      "restBetweenSets": 90,
+      "sectionId": "7F352627-0765-4A72-BFE7-8B510E56F4B9",
+      "setCount": 2
+    },
+    {
+      "displayName": "Chest Press",
+      "exerciseId": "75C4E821-84FD-41CB-95D2-C9766D563AF7",
+      "id": "E83011EE-09C0-49E8-9129-9CA31F1CD3B2",
+      "machineId": "BF4C1626-D6A7-45A1-BC46-053031625749",
+      "notes": "",
+      "order": 4,
+      "plannedReps": 12,
+      "plannedWeight": 95,
+      "restBetweenSets": 90,
+      "sectionId": "7F352627-0765-4A72-BFE7-8B510E56F4B9",
+      "setCount": 2
+    },
+    {
+      "displayName": "Back Extension",
+      "exerciseId": "67276C5A-27B2-42DA-8CE2-A8430E374BF0",
+      "id": "6507DF6F-F55E-4C9D-9FA3-884E8E37AED8",
+      "machineId": "A2CD16F4-E7D1-40DF-950C-AB646EE3D021",
+      "notes": "",
+      "order": 8,
+      "plannedReps": 15,
+      "plannedWeight": 115,
+      "restBetweenSets": 90,
+      "sectionId": "7F352627-0765-4A72-BFE7-8B510E56F4B9",
+      "setCount": 2
+    },
+    {
+      "displayName": "Elliptical Warm-Up",
+      "exerciseId": "3535401B-64C5-456A-8F5A-1B1A91412231",
+      "id": "FE3CD1F7-CBEE-415B-A7D0-782F292248E1",
+      "machineId": "BEBEC88E-7D43-47F0-BC96-C7A627883A43",
+      "notes": "Low effort warm-up. You should be able to talk comfortably. Keep resistance below your home cardio setting.",
+      "order": 0,
+      "plannedReps": 10,
+      "plannedWeight": 0,
+      "restBetweenSets": 90,
+      "sectionId": "706E676B-8EA5-4694-83E1-0F116DA035DA",
+      "setCount": 0
+    }
+  ],
+  "routinePlannedSets": [
+    {
+      "id": "E3F2DA8C-639B-4F34-98EC-0CD4BBE7A6DF",
+      "order": 0,
+      "plannedReps": 15,
+      "plannedWeight": 115,
+      "routineExerciseId": "13D5F662-2B8F-451C-B3AC-F15D54CD777B"
+    },
+    {
+      "id": "A165EDCA-7F9A-4C5A-BE8B-3D871A4A6940",
+      "order": 1,
+      "plannedReps": 15,
+      "plannedWeight": 115,
+      "routineExerciseId": "13D5F662-2B8F-451C-B3AC-F15D54CD777B"
+    },
+    {
+      "id": "A44E7739-78DD-4E24-BE0D-FE8CEB09C5CC",
+      "order": 0,
+      "plannedReps": 12,
+      "plannedWeight": 80,
+      "routineExerciseId": "2EFDED7C-B90C-4BAF-9441-606D86CEA8BA"
+    },
+    {
+      "id": "6DAB8FEA-5E5A-4653-A74E-CF89380B9874",
+      "order": 1,
+      "plannedReps": 12,
+      "plannedWeight": 80,
+      "routineExerciseId": "2EFDED7C-B90C-4BAF-9441-606D86CEA8BA"
+    },
+    {
+      "id": "E3F69179-552D-410A-8A35-7458684CE2E7",
+      "order": 1,
+      "plannedReps": 12,
+      "plannedWeight": 95,
+      "routineExerciseId": "2247A45F-AE0E-4B80-BE36-A73FA9FFEFF9"
+    },
+    {
+      "id": "EDEEC5F6-EF9A-49DB-9C55-F0B63804E512",
+      "order": 0,
+      "plannedReps": 12,
+      "plannedWeight": 95,
+      "routineExerciseId": "2247A45F-AE0E-4B80-BE36-A73FA9FFEFF9"
+    },
+    {
+      "id": "07F207AE-EB33-49E8-BAB4-DDD406AC8AED",
+      "order": 0,
+      "plannedReps": 12,
+      "plannedWeight": 75,
+      "routineExerciseId": "8242A16A-05DD-4AD9-BCD3-C94BC96B57C1"
+    },
+    {
+      "id": "E3411FB7-4982-46F9-B4A5-9C15C4366765",
+      "order": 1,
+      "plannedReps": 12,
+      "plannedWeight": 75,
+      "routineExerciseId": "8242A16A-05DD-4AD9-BCD3-C94BC96B57C1"
+    },
+    {
+      "id": "4BF02A3D-84BE-4F7C-9704-4F007B6326BE",
+      "order": 1,
+      "plannedReps": 15,
+      "plannedWeight": 80,
+      "routineExerciseId": "C21D3438-DDDB-48A7-8DFA-23545D64E630"
+    },
+    {
+      "id": "FAA0B863-D993-4FC3-98C4-5CDF5B43D24C",
+      "order": 0,
+      "plannedReps": 15,
+      "plannedWeight": 80,
+      "routineExerciseId": "C21D3438-DDDB-48A7-8DFA-23545D64E630"
+    },
+    {
+      "id": "40B3B9BF-3D93-48E0-84A8-E7521092A52C",
+      "order": 0,
+      "plannedReps": 12,
+      "plannedWeight": 45,
+      "routineExerciseId": "1861014A-F524-435F-B0A9-D5F2E1A3C2C4"
+    },
+    {
+      "id": "EAE6B1AF-8084-47D7-B7FF-C8FF981860CC",
+      "order": 1,
+      "plannedReps": 12,
+      "plannedWeight": 45,
+      "routineExerciseId": "1861014A-F524-435F-B0A9-D5F2E1A3C2C4"
+    },
+    {
+      "id": "84FA15C3-52C7-4424-B7C5-1ED4E6D19AE9",
+      "order": 0,
+      "plannedReps": 12,
+      "plannedWeight": 50,
+      "routineExerciseId": "D14C1F9D-9147-4147-9810-41E121080B2E"
+    },
+    {
+      "id": "47ECBA42-DA27-4995-9B2B-4ACDA14EA881",
+      "order": 1,
+      "plannedReps": 12,
+      "plannedWeight": 50,
+      "routineExerciseId": "D14C1F9D-9147-4147-9810-41E121080B2E"
+    },
+    {
+      "id": "429CB1BF-9EC0-4F0D-9E4A-00E27AF3D082",
+      "order": 1,
+      "plannedReps": 12,
+      "plannedWeight": 110,
+      "routineExerciseId": "B4DAA45F-A6E8-4929-B8F0-7B73546C27BB"
+    },
+    {
+      "id": "38F57F59-EBEA-48F4-A92A-07130319A736",
+      "order": 0,
+      "plannedReps": 12,
+      "plannedWeight": 110,
+      "routineExerciseId": "B4DAA45F-A6E8-4929-B8F0-7B73546C27BB"
+    },
+    {
+      "id": "4CC02067-846D-4FC1-8139-550C41DF7B5C",
+      "order": 1,
+      "plannedReps": 12,
+      "plannedWeight": 40,
+      "routineExerciseId": "D1297AFA-D61F-4D6F-A98D-130DDA47F493"
+    },
+    {
+      "id": "D4296AED-726C-4692-A9E5-C9C7F1CD2AF3",
+      "order": 0,
+      "plannedReps": 12,
+      "plannedWeight": 40,
+      "routineExerciseId": "D1297AFA-D61F-4D6F-A98D-130DDA47F493"
+    },
+    {
+      "id": "A992B974-1C85-473C-980D-3D344884527A",
+      "order": 1,
+      "plannedReps": 12,
+      "plannedWeight": 50,
+      "routineExerciseId": "66973C89-7CAF-4E67-8B7D-E7EFB48FD60B"
+    },
+    {
+      "id": "5AB4C90B-B35A-4AB7-ACA9-1780E78B4B0D",
+      "order": 0,
+      "plannedReps": 12,
+      "plannedWeight": 50,
+      "routineExerciseId": "66973C89-7CAF-4E67-8B7D-E7EFB48FD60B"
+    },
+    {
+      "id": "E399BD2A-F41F-458A-9550-FF5044A5813F",
+      "order": 0,
+      "plannedReps": 12,
+      "plannedWeight": 85,
+      "routineExerciseId": "BEA00210-A5D6-431B-9389-05A02A7DC268"
+    },
+    {
+      "id": "8F9134D4-DF98-40E6-814E-15B43BC44B04",
+      "order": 1,
+      "plannedReps": 12,
+      "plannedWeight": 85,
+      "routineExerciseId": "BEA00210-A5D6-431B-9389-05A02A7DC268"
+    },
+    {
+      "id": "9755DC84-AF60-487E-A026-CD9A7C3121EA",
+      "order": 1,
+      "plannedReps": 12,
+      "plannedWeight": 80,
+      "routineExerciseId": "2025C7F1-BA10-4491-B87C-F30ABCDCA7FA"
+    },
+    {
+      "id": "CD02A488-CE47-4D3E-9169-8523BCDE8A01",
+      "order": 0,
+      "plannedReps": 12,
+      "plannedWeight": 80,
+      "routineExerciseId": "2025C7F1-BA10-4491-B87C-F30ABCDCA7FA"
+    },
+    {
+      "id": "378C740A-F3DE-4210-B6FF-88D422A93E9F",
+      "order": 0,
+      "plannedReps": 12,
+      "plannedWeight": 95,
+      "routineExerciseId": "E4D49D67-7083-4351-B08D-C15714C8B075"
+    },
+    {
+      "id": "2C751AE7-A0DF-49F3-85C5-9F8CEB0D9879",
+      "order": 1,
+      "plannedReps": 12,
+      "plannedWeight": 95,
+      "routineExerciseId": "E4D49D67-7083-4351-B08D-C15714C8B075"
+    },
+    {
+      "id": "842D3197-73BA-4266-AA3D-03B93FEA09C9",
+      "order": 0,
+      "plannedReps": 8,
+      "plannedWeight": 5,
+      "routineExerciseId": "185ABC2E-1764-43EB-81AB-5BDFB155C0C2"
+    },
+    {
+      "id": "02F2D86F-3628-44E0-9C91-6782A5C66892",
+      "order": 0,
+      "plannedReps": 15,
+      "plannedWeight": 80,
+      "routineExerciseId": "D2EACD5A-6BE1-4B7E-9075-7C78B4CDAD32"
+    },
+    {
+      "id": "F15D33DD-E939-48DE-9BFB-E73F50406CB1",
+      "order": 1,
+      "plannedReps": 15,
+      "plannedWeight": 80,
+      "routineExerciseId": "D2EACD5A-6BE1-4B7E-9075-7C78B4CDAD32"
+    },
+    {
+      "id": "679E6984-AB28-457C-A4BE-0B6E50FBC413",
+      "order": 0,
+      "plannedReps": 12,
+      "plannedWeight": 95,
+      "routineExerciseId": "E83011EE-09C0-49E8-9129-9CA31F1CD3B2"
+    },
+    {
+      "id": "52367294-B021-4985-A413-F86D917ED245",
+      "order": 1,
+      "plannedReps": 12,
+      "plannedWeight": 95,
+      "routineExerciseId": "E83011EE-09C0-49E8-9129-9CA31F1CD3B2"
+    },
+    {
+      "id": "12C75B05-D6F5-4207-BEB1-16CCC00AB052",
+      "order": 0,
+      "plannedReps": 15,
+      "plannedWeight": 115,
+      "routineExerciseId": "6507DF6F-F55E-4C9D-9FA3-884E8E37AED8"
+    },
+    {
+      "id": "FA88F37D-6F8D-4ADF-A187-61DBB96ADF2A",
+      "order": 1,
+      "plannedReps": 15,
+      "plannedWeight": 115,
+      "routineExerciseId": "6507DF6F-F55E-4C9D-9FA3-884E8E37AED8"
+    }
+  ],
+  "routines": [
+    {
+      "createdAt": "2026-07-05T18:26:37Z",
+      "id": "136D973B-5E28-46D5-8EEC-BBC55147A339",
+      "name": "Strength Workout A (Weeks 1-6)",
+      "source": "seedDemo",
+      "updatedAt": "2026-08-08T21:56:36Z"
+    },
+    {
+      "createdAt": "2026-07-05T18:26:44Z",
+      "id": "8B57FA69-4692-460A-AC6E-6C206E280FDD",
+      "name": "Strength Workout B (Weeks 1-6)",
+      "source": "seedDemo",
+      "updatedAt": "2026-07-09T17:19:53Z"
+    }
+  ],
+  "schedules": [],
+  "sections": [
+    {
+      "id": "B243CFA5-3B02-46C3-B641-1443EE78A441",
+      "order": 2,
+      "title": "Strength",
+      "type": "strength",
+      "versionId": "8028399B-11E9-4B69-939E-E13CDD1B932F"
+    },
+    {
+      "id": "9E475289-E67B-45D7-BE23-84643356F5C8",
+      "order": 1,
+      "title": "Stretching",
+      "type": "stretching",
+      "versionId": "8028399B-11E9-4B69-939E-E13CDD1B932F"
+    },
+    {
+      "durationMinutes": 10,
+      "id": "5C5D5E40-4978-4CFB-AFCC-3F54D2DBD19B",
+      "order": 0,
+      "title": "Cardio",
+      "type": "cardio",
+      "versionId": "8028399B-11E9-4B69-939E-E13CDD1B932F"
+    },
+    {
+      "id": "5ABE04B3-7A72-4D28-9DAC-CFF5113331E5",
+      "order": 1,
+      "title": "Stretching",
+      "type": "stretching",
+      "versionId": "C9B0D1D6-D7C0-4EBD-9484-A1F9E5490734"
+    },
+    {
+      "id": "7F352627-0765-4A72-BFE7-8B510E56F4B9",
+      "order": 2,
+      "title": "Strength",
+      "type": "strength",
+      "versionId": "C9B0D1D6-D7C0-4EBD-9484-A1F9E5490734"
+    },
+    {
+      "durationMinutes": 10,
+      "id": "706E676B-8EA5-4694-83E1-0F116DA035DA",
+      "order": 0,
+      "title": "Cardio",
+      "type": "cardio",
+      "versionId": "C9B0D1D6-D7C0-4EBD-9484-A1F9E5490734"
+    }
+  ],
+  "sessionExercises": [],
+  "sessionMachineSettings": [],
+  "sessionSets": [],
+  "sessions": [],
+  "settingDefs": [
+    {
+      "id": "EAC2F0FA-3C9B-41B6-9171-6DE217C6A949",
+      "label": "Seat",
+      "machineId": "55C3DFB7-01FE-4FB7-BC7A-CF20BDC2603D",
+      "numericValue": 6,
+      "order": 0,
+      "source": "seedDemo"
+    },
+    {
+      "id": "10C56508-613F-45A9-9C8B-02031B564D5C",
+      "label": "Y seat",
+      "machineId": "55C3DFB7-01FE-4FB7-BC7A-CF20BDC2603D",
+      "numericValue": 7,
+      "order": 1,
+      "source": "seedDemo"
+    },
+    {
+      "id": "3678CD23-4D42-450F-A69A-EAFA92CB6115",
+      "label": "Back",
+      "machineId": "316CFF07-5D44-44B3-9C31-E27229BCD63B",
+      "numericValue": 4,
+      "order": 1,
+      "source": "seedDemo"
+    },
+    {
+      "id": "B89CF1ED-07B1-46AD-AE27-6482564F43AE",
+      "label": "Thigh",
+      "machineId": "316CFF07-5D44-44B3-9C31-E27229BCD63B",
+      "numericValue": 3,
+      "order": 2,
+      "source": "seedDemo"
+    },
+    {
+      "id": "6A341C67-98A0-4E17-884A-5C24CF1B7F8F",
+      "label": "Ankle",
+      "machineId": "316CFF07-5D44-44B3-9C31-E27229BCD63B",
+      "numericValue": 1,
+      "order": 0,
+      "source": "seedDemo"
+    },
+    {
+      "id": "E050B05D-9A17-44E8-91D6-7014BD3E30B6",
+      "label": "Y Ankle",
+      "machineId": "316CFF07-5D44-44B3-9C31-E27229BCD63B",
+      "order": 3,
+      "otherText": "L",
+      "source": "seedDemo"
+    },
+    {
+      "id": "97BEE29A-36CA-4B85-82DD-F7529904E360",
+      "label": "Y pitch ",
+      "machineId": "316CFF07-5D44-44B3-9C31-E27229BCD63B",
+      "numericValue": 1,
+      "order": 4,
+      "source": "seedDemo"
+    },
+    {
+      "id": "4438B327-0E5D-49DC-907C-2F2A0548D771",
+      "label": "Y Back",
+      "machineId": "316CFF07-5D44-44B3-9C31-E27229BCD63B",
+      "numericValue": 4,
+      "order": 5,
+      "source": "seedDemo"
+    },
+    {
+      "id": "B7DC7C0B-1DD0-418D-A282-09DDD4802306",
+      "label": "Resistance ",
+      "machineId": "BEBEC88E-7D43-47F0-BC96-C7A627883A43",
+      "numericValue": 10,
+      "order": 0,
+      "source": "seedDemo"
+    },
+    {
+      "id": "7112080B-B808-42AD-91F1-F56C531BEA93",
+      "label": "Chest",
+      "machineId": "92AAA5F5-7292-41A8-8034-2EAAB109D131",
+      "numericValue": 6,
+      "order": 0,
+      "source": "seedDemo"
+    },
+    {
+      "id": "9292A52C-3F65-4C79-92B1-46FF35D9C5A2",
+      "label": "Seat",
+      "machineId": "92AAA5F5-7292-41A8-8034-2EAAB109D131",
+      "numericValue": 7,
+      "order": 1,
+      "source": "seedDemo"
+    },
+    {
+      "id": "4B2140B3-BC44-4D2F-A8FA-A9E9842772BB",
+      "label": "Seat",
+      "machineId": "C9FD51F2-8ACB-46BF-8D28-A8FB28027D96",
+      "numericValue": 4,
+      "order": 0,
+      "source": "seedDemo"
+    },
+    {
+      "id": "192279E0-7B2E-42D2-A546-C0950708545D",
+      "label": "Seat",
+      "machineId": "28D7B47F-63D3-40CE-BD04-3E9C41687B03",
+      "numericValue": 6,
+      "order": 0,
+      "source": "seedDemo"
+    },
+    {
+      "id": "BC1959DA-C7B5-43B8-8106-B8789D9B5BFE",
+      "label": "Seat",
+      "machineId": "398DEF8B-4DB4-4648-B4E1-98B82F9E949E",
+      "numericValue": 6,
+      "order": 0,
+      "source": "seedDemo"
+    },
+    {
+      "id": "B4FCE452-2674-4104-87A8-92357F5469E6",
+      "label": "Back",
+      "machineId": "BF4C1626-D6A7-45A1-BC46-053031625749",
+      "numericValue": 2,
+      "order": 1,
+      "source": "seedDemo"
+    },
+    {
+      "id": "52D065D6-B6F5-4D98-A6CD-BF197E1DE27A",
+      "label": "Seat",
+      "machineId": "BF4C1626-D6A7-45A1-BC46-053031625749",
+      "numericValue": 4,
+      "order": 0,
+      "source": "seedDemo"
+    },
+    {
+      "id": "87F0846B-E2B4-4D04-8E66-80D1622A9B0D",
+      "label": "Y Seat",
+      "machineId": "BF4C1626-D6A7-45A1-BC46-053031625749",
+      "numericValue": 6,
+      "order": 2,
+      "source": "seedDemo"
+    },
+    {
+      "id": "ACAFC7CC-0DE4-4085-B1EB-53DA0A483304",
+      "label": "Back bar",
+      "machineId": "A2CD16F4-E7D1-40DF-950C-AB646EE3D021",
+      "numericValue": 6,
+      "order": 0,
+      "source": "seedDemo"
+    }
+  ],
+  "versions": [
+    {
+      "createdAt": "2026-08-08T21:56:16Z",
+      "defaultRest": 60,
+      "defaultRestSets": 60,
+      "id": "8028399B-11E9-4B69-939E-E13CDD1B932F",
+      "isActive": true,
+      "note": "",
+      "routineId": "136D973B-5E28-46D5-8EEC-BBC55147A339",
+      "source": "seedDemo",
+      "versionNumber": 1
+    },
+    {
+      "createdAt": "2026-07-09T17:19:52Z",
+      "defaultRest": 90,
+      "defaultRestSets": 60,
+      "id": "C9B0D1D6-D7C0-4EBD-9484-A1F9E5490734",
+      "isActive": true,
+      "note": "",
+      "routineId": "8B57FA69-4692-460A-AC6E-6C206E280FDD",
+      "source": "seedDemo",
+      "versionNumber": 1
+    }
+  ]
+}

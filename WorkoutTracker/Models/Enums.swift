@@ -96,16 +96,6 @@ enum SessionStatus: String, Codable, CaseIterable, Sendable {
         case .abandoned: return "Abandoned"
         }
     }
-
-    /// A "completed" session in the immutability sense: history that must never
-    /// be overwritten when a routine changes. Both completed and partial count
-    /// as real recorded history.
-    var isRecordedHistory: Bool {
-        switch self {
-        case .completed, .partial, .abandoned: return true
-        case .scheduled, .started, .missed: return false
-        }
-    }
 }
 
 /// Perceived effort scale for a set.

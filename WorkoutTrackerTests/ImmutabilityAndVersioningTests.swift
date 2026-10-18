@@ -104,10 +104,10 @@ final class ImmutabilityAndVersioningTests: XCTestCase {
         XCTAssertEqual(routine.versions.count, 1)
     }
 
-    // 7. Editing a catalog Exercise's defaults updates an existing routine's
-    // RoutineExercise WITHOUT forking a new RoutineVersion — settings are a
-    // live-reconciled mirror of the catalog, not versioned routine content.
-    func test07_catalogEditUpdatesRoutineWithoutForkingVersion() throws {
+    // 7. Editing a catalog Exercise's defaults updates the routine. The
+    // version a workout was started from is never changed (a locked workout
+    // holds its values forever), so the update lands in a new version.
+    func test07_catalogEditUpdatesRoutineInANewVersion() throws {
         let ctx = TestSupport.makeContext()
         let (routine, exercise, _) = TestSupport.buildRoutine(ctx, weight: 100)
         _ = WorkoutRepository(ctx).startWorkout(from: routine)
@@ -118,8 +118,10 @@ final class ImmutabilityAndVersioningTests: XCTestCase {
         CatalogSyncService(ctx).reconcileExercise(exercise.id)
         try ctx.save()
 
-        XCTAssertEqual(routine.versions.count, 1)
+        XCTAssertEqual(routine.versions.count, 2)
         XCTAssertEqual(TestSupport.firstExercise(of: routine).plannedWeight, 110)
+        let old = routine.versions.first { !$0.isActive }
+        XCTAssertEqual(old?.orderedSections.first?.orderedExercises.first?.plannedWeight, 100)
     }
 
     // 8. A LOCKED (finished) session's snapshot is unaffected by a later catalog

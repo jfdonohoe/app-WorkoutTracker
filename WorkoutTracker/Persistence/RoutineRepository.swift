@@ -128,8 +128,10 @@ struct RoutineRepository {
     func isReferencedBySession(_ version: RoutineVersion) -> Bool {
         // Capture as optional so the predicate compares UUID? == UUID? cleanly.
         let vid: UUID? = version.id
+        // Deleted and discarded workouts don't count: nothing shows them, and
+        // each keeps its own snapshot anyway.
         let descriptor = FetchDescriptor<WorkoutSession>(
-            predicate: #Predicate { $0.routineVersionId == vid }
+            predicate: #Predicate { $0.routineVersionId == vid && $0.deletedAt == nil }
         )
         let count = (try? context.fetchCount(descriptor)) ?? 0
         return count > 0
@@ -155,49 +157,16 @@ struct RoutineRepository {
                                         versionNumber: routine.nextVersionNumber,
                                         isActive: true,
                                         defaultRestBetweenExercises: current.defaultRestBetweenExercises,
+                                        defaultRestBetweenSets: current.defaultRestBetweenSets,
                                         note: note,
                                         source: routine.source) // inherit demo/user lineage
+        newVersion.rests = current.rests
         newVersion.routine = routine
         routine.versions.append(newVersion)
         context.insert(newVersion)
 
         // Deep copy sections & exercises with fresh ids.
-        for section in current.orderedSections {
-            let newSection = RoutineSection(type: section.type,
-                                            title: section.title,
-                                            order: section.order,
-                                            durationMinutes: section.durationMinutes)
-            newSection.version = newVersion
-            newVersion.sections.append(newSection)
-            context.insert(newSection)
-
-            for ex in section.orderedExercises {
-                let newEx = RoutineExercise(exerciseId: ex.exerciseId,
-                                            machineId: ex.machineId,
-                                            displayName: ex.displayName,
-                                            order: ex.order,
-                                            setCount: ex.setCount,
-                                            plannedWeight: ex.plannedWeight,
-                                            plannedReps: ex.plannedReps,
-                                            restBetweenSets: ex.restBetweenSets,
-                                            notes: ex.notes,
-                                            targetEffort: ex.targetEffort)
-                newEx.section = newSection
-                newSection.exercises.append(newEx)
-                context.insert(newEx)
-
-                // Deep-copy per-set planned rows so the new version is a faithful
-                // independent copy.
-                for ps in ex.plannedSets.sorted(by: { $0.order < $1.order }) {
-                    let newPs = RoutinePlannedSet(order: ps.order,
-                                                  plannedReps: ps.plannedReps,
-                                                  plannedWeight: ps.plannedWeight)
-                    newPs.exercise = newEx
-                    newEx.plannedSets.append(newPs)
-                    context.insert(newPs)
-                }
-            }
-        }
+        copySections(from: current, to: newVersion)
 
         routine.updatedAt = .now
         Audit.log(context, type: "routine.versioned", entity: "RoutineVersion",
@@ -223,14 +192,10 @@ struct RoutineRepository {
         routine.updatedAt = .now
     }
 
-    /// Duplicate a routine (its active version) into a brand-new routine. Used by
-    /// "save as a new routine".
-    @discardableResult
-    func cloneRoutine(_ source: Routine, newName: String) -> Routine {
-        let clone = createRoutine(name: newName, source: .user)
-        guard let src = source.activeVersion, let dst = clone.activeVersion else { return clone }
-        dst.defaultRestBetweenExercises = src.defaultRestBetweenExercises
-        dst.defaultRestBetweenSets = src.defaultRestBetweenSets
+    /// Deep-copy a version's sections, exercises and per-set planned rows into
+    /// another version, with fresh ids, so the copy is independent. The one
+    /// place this copy is written (new version, clone, calendar replace).
+    private func copySections(from src: RoutineVersion, to dst: RoutineVersion) {
         for section in src.orderedSections {
             let newSection = RoutineSection(type: section.type, title: section.title,
                                             order: section.order, durationMinutes: section.durationMinutes)
@@ -247,13 +212,26 @@ struct RoutineRepository {
                 newSection.exercises.append(newEx)
                 context.insert(newEx)
                 for ps in ex.plannedSets.sorted(by: { $0.order < $1.order }) {
-                    let newPs = RoutinePlannedSet(order: ps.order, plannedReps: ps.plannedReps, plannedWeight: ps.plannedWeight)
+                    let newPs = RoutinePlannedSet(order: ps.order, plannedReps: ps.plannedReps,
+                                                  plannedWeight: ps.plannedWeight)
                     newPs.exercise = newEx
                     newEx.plannedSets.append(newPs)
                     context.insert(newPs)
                 }
             }
         }
+    }
+
+    /// Duplicate a routine (its active version) into a brand-new routine. Used by
+    /// "save as a new routine".
+    @discardableResult
+    func cloneRoutine(_ source: Routine, newName: String) -> Routine {
+        // A copy stays on its original's side: a demo routine's copy is demo,
+        // since it uses demo exercises. Demo and user data never mix.
+        let clone = createRoutine(name: newName, source: source.source)
+        guard let src = source.activeVersion, let dst = clone.activeVersion else { return clone }
+        dst.rests = src.rests
+        copySections(from: src, to: dst)
         return clone
     }
 
@@ -267,43 +245,25 @@ struct RoutineRepository {
         let newVersion = makeNewVersion(of: target, note: "Edited from calendar")
         for s in newVersion.sections { context.delete(s) }
         newVersion.sections = []
-        newVersion.defaultRestBetweenExercises = src.defaultRestBetweenExercises
-        newVersion.defaultRestBetweenSets = src.defaultRestBetweenSets
-        for section in src.orderedSections {
-            let ns = RoutineSection(type: section.type, title: section.title,
-                                    order: section.order, durationMinutes: section.durationMinutes)
-            ns.version = newVersion
-            newVersion.sections.append(ns)
-            context.insert(ns)
-            for ex in section.orderedExercises {
-                let ne = RoutineExercise(exerciseId: ex.exerciseId, machineId: ex.machineId,
-                                         displayName: ex.displayName, order: ex.order,
-                                         setCount: ex.setCount, plannedWeight: ex.plannedWeight,
-                                         plannedReps: ex.plannedReps, restBetweenSets: ex.restBetweenSets,
-                                         notes: ex.notes, targetEffort: ex.targetEffort)
-                ne.section = ns
-                ns.exercises.append(ne)
-                context.insert(ne)
-                for ps in ex.plannedSets.sorted(by: { $0.order < $1.order }) {
-                    let nps = RoutinePlannedSet(order: ps.order, plannedReps: ps.plannedReps, plannedWeight: ps.plannedWeight)
-                    nps.exercise = ne
-                    ne.plannedSets.append(nps)
-                    context.insert(nps)
-                }
-            }
-        }
+        newVersion.rests = src.rests
+        copySections(from: src, to: newVersion)
         target.updatedAt = .now
     }
 
-    /// Update a library Exercise's default prescription (used when baking in
-    /// workout edits).
-    func updateExerciseDefaults(exerciseId: UUID, sets: [(reps: Int, weight: Double)]) {
+    /// Update a library Exercise's default prescription for one of its
+    /// machines (nil = the primary machine). Used when baking in workout edits
+    /// and by the set builder. Other machines' sets are left alone. A deleted
+    /// exercise is never edited.
+    func updateExerciseDefaults(exerciseId: UUID, machineId: UUID? = nil, sets: [(reps: Int, weight: Double)]) {
         let d = FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == exerciseId })
-        guard let exercise = try? context.fetch(d).first else { return }
-        for s in exercise.defaultSets { context.delete(s) }
-        exercise.defaultSets = []
+        guard let exercise = try? context.fetch(d).first, exercise.deletedAt == nil else { return }
+        let target = machineId ?? exercise.machineId
+        let stale = exercise.defaultSets.filter { ($0.machineId ?? exercise.machineId) == target }
+        let staleIds = Set(stale.map(\.id))
+        exercise.defaultSets.removeAll { staleIds.contains($0.id) }
+        for s in stale { context.delete(s) }
         for (i, s) in sets.enumerated() {
-            let ds = ExerciseDefaultSet(order: i, reps: s.reps, weight: s.weight)
+            let ds = ExerciseDefaultSet(order: i, reps: s.reps, weight: s.weight, machineId: target)
             ds.exercise = exercise
             exercise.defaultSets.append(ds)
             context.insert(ds)
@@ -340,14 +300,18 @@ struct RoutineRepository {
         guard let matches = try? context.fetch(descriptor) else { return }
         var affected: [UUID: Routine] = [:]
         for re in matches {
-            guard let version = re.section?.version, version.isActive,
-                  let routine = version.routine, routine.deletedAt == nil else { continue }
+            guard let version = re.section?.version,
+                  let routine = version.routine, routine.deletedAt == nil,
+                  version.id == routine.activeVersion?.id else { continue }
             affected[routine.id] = routine
         }
         for routine in affected.values {
             editRoutine(routine, note: "Exercise removed from library") { version in
                 for section in version.sections {
                     let toRemove = section.exercises.filter { $0.exerciseId == exerciseId }
+                    // Detach before deleting so nothing reads a deleted row
+                    // through the relationship before the next save.
+                    section.exercises.removeAll { $0.exerciseId == exerciseId }
                     for ex in toRemove { context.delete(ex) }
                 }
             }

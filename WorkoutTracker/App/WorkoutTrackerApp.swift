@@ -15,6 +15,7 @@ struct WorkoutTrackerApp: App {
     /// `nil` only when this process is an XCTest host — see `isRunningTests`.
     let container: ModelContainer?
     @StateObject private var restTimer = RestTimerService()
+    @StateObject private var guidedTimer = GuidedTimerService()
     @Environment(\.scenePhase) private var scenePhase
     /// Covers the app with the branded artwork for a beat after launch. See
     /// SplashView for why the branding lives here and not in the launch
@@ -42,6 +43,20 @@ struct WorkoutTrackerApp: App {
         // Reconcile demo data against the current store, on a main-actor context.
         let ctx = container.mainContext
         SeedDataService(ctx).reconcileDemoData()
+        // One-time cleanups of old damage (deleted exercises left in
+        // routines, duplicated planned sets). The Data Safety repairs run on
+        // import only — the only way those problems can arrive.
+        let cleaned = CatalogSyncService(ctx).runOneTimeCleanupsIfNeeded()
+        // Exercises saved before the exercise structure get a kind and its
+        // fields (one predicate fetch when there is nothing to do).
+        let migrated = ExerciseStructureMigration(ctx).run().changedAnything
+        // Abandoned workouts (nothing done) are discarded, never kept.
+        let purged = WorkoutRepository(ctx).purgeDiscardedWorkouts() > 0
+        // Locked workouts keep the distance unit they were recorded in.
+        let frozen = WorkoutRepository(ctx).freezeDistanceUnits() > 0
+        if cleaned || purged || migrated || frozen {
+            try? ctx.save()
+        }
         NotificationService.shared.requestAuthorizationIfNeeded()
         // Warm grouped background (#FAF8F2) behind every List/Form. Cards (cells)
         // stay white (systemBackground), matching DesignSystem.html.
@@ -55,6 +70,8 @@ struct WorkoutTrackerApp: App {
                 ZStack {
                     RootView()
                         .environmentObject(restTimer)
+                        .environmentObject(guidedTimer)
+                        .environment(\.timerCommands, TimerCommands(rest: restTimer, guided: guidedTimer))
                         // Keep the screen awake whenever the app is in the foreground.
                         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
                         .onChange(of: scenePhase) { _, phase in

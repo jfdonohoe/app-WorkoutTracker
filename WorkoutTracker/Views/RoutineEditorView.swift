@@ -34,12 +34,18 @@ struct RoutineEditorView: View {
     @State private var workingVersionId: UUID?
     @State private var didFork = false
     @State private var addExerciseSection: RoutineSection?
-    @State private var editExercise: RoutineExercise?
+    /// The library exercise being edited from a routine row. A routine only
+    /// lists which exercises, in what order; sets, reps, weight, machines and
+    /// settings all belong to the exercise.
+    @State private var editDefinition: Exercise?
     @State private var showDeleteConfirm = false
     // Schedule (Calendar edit only).
     @State private var scheduleEnabled = false
     @State private var recurrence = RecurrenceState()
     @State private var didLoadSchedule = false
+    /// The schedule as loaded. Until the user changes it, nothing is written,
+    /// so merely opening the editor can't rewrite or remove any rule.
+    @State private var loadedSchedule: (enabled: Bool, recurrence: RecurrenceState)?
 
     private var repo: RoutineRepository { RoutineRepository(context) }
 
@@ -75,11 +81,12 @@ struct RoutineEditorView: View {
             if scheduleRoutineId != nil { scheduleSection }
 
             if let version = displayVersion {
-                restSection(version)
                 ForEach(version.orderedSections) { section in
                     sectionView(section)
                 }
                 .onDelete { offsets in removeSections(version, offsets) }
+                // Rests per exercise type, after the exercises; Delete stays last.
+                restSection(version)
             }
 
             if !isCreating {
@@ -102,11 +109,14 @@ struct RoutineEditorView: View {
         }
         .onAppear {
             loadSchedule()
-            CatalogSyncService(context).reconcileRoutine(routine)
+            syncWithLibrary()
         }
         .onChange(of: scheduleEnabled) { _, _ in scheduleChanged() }
         .onChange(of: recurrence) { _, _ in scheduleChanged() }
         .navigationTitle(isCreating ? "New Routine" : routine.name)
+        // A new routine (or calendar clone) is saved before this opens; only
+        // Cancel discards it, so a swipe-down mustn't leave it behind.
+        .interactiveDismissDisabled(isCreating)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if isCreating {
@@ -126,47 +136,33 @@ struct RoutineEditorView: View {
             }
         }
         .sheet(item: $addExerciseSection) { section in
-            // Only exercises matching this grouping's type can be added.
-            ExercisePickerSheet(group: section.type) { exercise in
+            // Only exercises matching this grouping's type — and the
+            // routine's demo/user source — can be added.
+            ExercisePickerSheet(group: section.type, source: section.version?.source ?? .user) { exercise in
                 addExercise(exercise, to: section)
             }
         }
-        .sheet(item: $editExercise) { ex in
-            SetBuilderSheet(title: ex.displayName,
-                            machineId: ex.machineId,
-                            exerciseId: ex.exerciseId,
-                            defaultRest: displayVersion?.defaultRestBetweenSets ?? 60,
-                            initialSets: ex.effectivePlannedSets,
-                            initialRest: ex.restBetweenSets) { sets, rest in
-                saveSets(to: ex, sets: sets, rest: rest)
-            }
+        .sheet(item: $editDefinition, onDismiss: {
+            syncWithLibrary()
+        }) { exercise in
+            NavigationStack { ExerciseEditorView(existing: exercise) }
         }
     }
 
     // MARK: - Sections
 
     private func restSection(_ version: RoutineVersion) -> some View {
-        Section("Cooldowns (routine-level)") {
-            Stepper("Between exercises: \(version.defaultRestBetweenExercises)s",
-                    value: Binding(
-                        get: { version.defaultRestBetweenExercises },
-                        set: { newValue in
-                            ensureEditableVersion()
-                            displayVersion?.defaultRestBetweenExercises = newValue
-                            save()
-                        }),
-                    in: 0...600, step: 15)
-            Stepper("Between sets: \(version.defaultRestBetweenSets)s",
-                    value: Binding(
-                        get: { version.defaultRestBetweenSets },
-                        set: { newValue in
-                            ensureEditableVersion()
-                            displayVersion?.defaultRestBetweenSets = newValue
-                            save()
-                        }),
-                    in: 0...600, step: 15)
-        }
+        // Rest is set per routine (never per exercise), per exercise type. It
+        // can also be changed on the workout screen, which updates this.
+        RestSettingsSections(rests: Binding(
+            get: { version.rests },
+            set: { newValue in
+                ensureEditableVersion()
+                displayVersion?.rests = newValue
+                save()
+            }))
     }
+
 
     private func sectionView(_ section: RoutineSection) -> some View {
         // Other groupings of the SAME type, available as move targets.
@@ -192,25 +188,16 @@ struct RoutineEditorView: View {
 
             ForEach(section.orderedExercises) { ex in
                 HStack {
-                    if section.type == .strength {
-                        // Strength: per-set plan, tap to edit sets/reps/weight.
-                        Button { editExercise = ex } label: {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(ex.displayName).font(.body).foregroundStyle(.primary)
-                                Text("\(ex.effectivePlannedSets.count)×\(ex.plannedReps) @ \(Int(ex.plannedWeight)) lb")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                        .tint(.primary)
-                    } else {
-                        // Cardio / stretching: show the exercise definition's own
-                        // characteristics (duration/intensity, hold/sides/rounds).
+                    // Tap to edit the exercise itself; changes apply to every
+                    // routine that uses it.
+                    Button { editDefinition = definition(ex.exerciseId) } label: {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(ex.displayName).font(.body)
+                            Text(ex.displayName).font(.body).foregroundStyle(.primary)
                             Text(definition(ex.exerciseId)?.summary ?? section.type.displayName)
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
+                    .tint(.primary)
                     Spacer()
                     if !moveTargets.isEmpty {
                         Menu {
@@ -270,7 +257,7 @@ struct RoutineEditorView: View {
             Text("Schedule")
         } footer: {
             Text(scheduleEnabled
-                 ? "This routine will appear on Today and the Calendar on the matching days."
+                 ? "This routine will appear on the Workout tab and the Calendar on the matching days."
                  : "Turn on to repeat this routine automatically.")
         }
     }
@@ -279,7 +266,8 @@ struct RoutineEditorView: View {
         guard let rid = scheduleRoutineId, !didLoadSchedule else { return }
         defer { didLoadSchedule = true }
         let rules = (try? context.fetch(
-            FetchDescriptor<ScheduleRule>(predicate: #Predicate { $0.routineId == rid && $0.deletedAt == nil })
+            FetchDescriptor<ScheduleRule>(predicate: #Predicate { $0.routineId == rid && $0.deletedAt == nil },
+                                          sortBy: [SortDescriptor(\.createdAt)])
         )) ?? []
         if let rule = rules.first(where: { $0.isRecurring }) {
             // Already on a recurring schedule → toggle on, show its recurrence.
@@ -295,27 +283,32 @@ struct RoutineEditorView: View {
             recurrence = seed
             scheduleEnabled = false
         }
+        loadedSchedule = (scheduleEnabled, recurrence)
     }
 
     private func scheduleChanged() {
         guard scheduleRoutineId != nil, didLoadSchedule else { return }
+        if let loaded = loadedSchedule, loaded.enabled == scheduleEnabled, loaded.recurrence == recurrence { return }
+        loadedSchedule = nil   // edited: from here on, every change is applied
         applySchedule()
     }
 
     /// Reconcile the routine's RECURRING schedule with the editor state (live).
-    /// One-off occurrences (e.g. "Add one") are left untouched.
+    /// The editor shows and edits the first recurring rule. Other recurring
+    /// rules (another weekday pattern, a sheet-imported schedule) and one-off
+    /// occurrences are left alone; turning the schedule off ends them all.
     private func applySchedule() {
         guard let rid = scheduleRoutineId else { return }
         let rules = (try? context.fetch(
-            FetchDescriptor<ScheduleRule>(predicate: #Predicate { $0.routineId == rid && $0.deletedAt == nil })
+            FetchDescriptor<ScheduleRule>(predicate: #Predicate { $0.routineId == rid && $0.deletedAt == nil },
+                                          sortBy: [SortDescriptor(\.createdAt)])
         )) ?? []
         let recurring = rules.filter { $0.isRecurring }
         if scheduleEnabled {
             if let rule = recurring.first {
                 recurrence.apply(to: rule)
-                for extra in recurring.dropFirst() { extra.deletedAt = .now }
             } else {
-                context.insert(recurrence.buildRule(routineId: rid))
+                context.insert(recurrence.buildRule(routineId: rid, source: routine.source))
             }
         } else {
             for rule in recurring { rule.deletedAt = .now } // only recurring; keep one-offs
@@ -328,6 +321,14 @@ struct RoutineEditorView: View {
     private var isActiveReferenced: Bool {
         guard let active = routine.activeVersion else { return false }
         return repo.isReferencedBySession(active)
+    }
+
+    /// Bring the routine up to date with the library. That can move the
+    /// update into a new version (when a workout used this one), so stop
+    /// editing a version that is no longer active.
+    private func syncWithLibrary() {
+        CatalogSyncService(context).reconcileRoutine(routine)
+        if let id = workingVersionId, routine.activeVersion?.id != id { workingVersionId = nil }
     }
 
     private func ensureEditableVersion() {
@@ -424,22 +425,10 @@ struct RoutineEditorView: View {
         let routineRest = displayVersion?.defaultRestBetweenSets ?? 60
         repo.addExercise(to: sec, exercise: exercise,
                          plannedSets: seedSets, restBetweenSets: routineRest)
+        // Match the library now, while no workout uses this version, so a
+        // later sync doesn't need a new version for it.
+        CatalogSyncService(context).reconcileExercise(exercise.id)
         save()
-    }
-
-    /// Sets/reps/weight/rest are exercise SETTINGS, not routine structure — they
-    /// write straight to the catalog Exercise (single source of truth) and
-    /// reconcile every routine/in-progress session that references it, rather
-    /// than forking a routine version.
-    private func saveSets(to exercise: RoutineExercise, sets: [(reps: Int, weight: Double)], rest: Int) {
-        let exerciseId = exercise.exerciseId
-        repo.updateExerciseDefaults(exerciseId: exerciseId, sets: sets)
-        if let def = try? context.fetch(FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == exerciseId })).first {
-            def.defaultRest = rest
-            def.updatedAt = .now
-        }
-        CatalogSyncService(context).reconcileExercise(exerciseId)
-        try? context.save()
     }
 
     private func resolveExercise(_ ex: RoutineExercise) -> RoutineExercise? {

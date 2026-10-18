@@ -16,14 +16,11 @@ enum AppContainer {
     /// Built through the versioned schema + migration plan so future schema
     /// changes are forced through reviewable, non-destructive migrations.
     ///
-    /// DEV vs PRODUCTION behavior is split by the `DEBUG` compile flag (on in
-    /// Xcode, compiled OUT of Release/App Store builds):
-    ///  • DEBUG  — a schema mismatch (common while iterating on the model) wipes
-    ///             the disposable dev store and retries, so you never have to
-    ///             hand-delete the app. A `--reset-store` launch argument forces
-    ///             a clean store on demand.
-    ///  • RELEASE — never deletes anything. A failure to open is fatal and loud
-    ///             so real history is protected (principle #8).
+    /// No build ever deletes the store on its own: a failure to open is fatal
+    /// and loud, so real history is protected (principle #8) — including a
+    /// Debug build installed from Xcode onto the phone that holds it. In
+    /// DEBUG only, a `--reset-store` launch argument starts a clean store on
+    /// purpose.
     static func makeLive() -> ModelContainer {
         let schema = Schema(versionedSchema: WorkoutSchemaV1.self)
         let config = ModelConfiguration(
@@ -48,34 +45,16 @@ enum AppContainer {
                 configurations: [config]
             )
         } catch {
-            #if DEBUG
-            // DEVELOPMENT ONLY: the dev store is disposable. A failure here is
-            // almost always an incompatible schema after a model change, so wipe
-            // and retry to keep iteration fast. This entire branch is removed
-            // from Release builds.
-            print("⚠️ [DEBUG] Could not open store (\(error)). Wiping dev store and retrying.")
-            destroyStoreFiles()
-            do {
-                return try ModelContainer(
-                    for: schema,
-                    migrationPlan: WorkoutMigrationPlan.self,
-                    configurations: [config]
-                )
-            } catch {
-                fatalError("[DEBUG] Failed to recreate dev store: \(error)")
-            }
-            #else
-            // PRODUCTION: never delete the store to "fix" it — that would
-            // destroy history (principle #8). Fail loudly so the user can back
-            // up / export first.
+            // Never delete the store to "fix" it — that would destroy history
+            // (principle #8). Fail loudly so the user can back up / export
+            // first. (Debug: launch with --reset-store to start clean.)
             fatalError(
                 """
-                Failed to open the workout database. Release builds never delete \
-                or recreate the store automatically, to protect your history. \
+                Failed to open the workout database. The app never deletes or \
+                recreates it automatically, to protect your history. \
                 Underlying error: \(error)
                 """
             )
-            #endif
         }
     }
 

@@ -81,19 +81,4 @@ struct ScheduleService {
     func scheduledRoutineIds(on date: Date, rules: [ScheduleRule]) -> [UUID] {
         rules.filter { occurs($0, on: date) }.map(\.routineId)
     }
-
-    /// All dates in `month` (any Date within it) that have at least one scheduled
-    /// workout, for drawing calendar markers.
-    func scheduledDates(inMonthOf monthDate: Date, rules: [ScheduleRule]) -> Set<Date> {
-        guard let interval = calendar.dateInterval(of: .month, for: monthDate) else { return [] }
-        var result: Set<Date> = []
-        var cursor = interval.start
-        while cursor < interval.end {
-            if rules.contains(where: { occurs($0, on: cursor) }) {
-                result.insert(calendar.startOfDay(for: cursor))
-            }
-            cursor = calendar.date(byAdding: .day, value: 1, to: cursor) ?? interval.end
-        }
-        return result
-    }
 }

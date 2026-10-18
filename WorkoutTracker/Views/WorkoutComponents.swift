@@ -178,60 +178,6 @@ struct RestTimerBar: View {
     }
 }
 
-// MARK: - Add unplanned exercise (name + set-by-set)
-
-struct AddUnplannedExerciseSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    var defaultRest: Int = 90
-    var onAdd: (_ name: String, _ sets: [(reps: Int, weight: Double)], _ rest: Int) -> Void
-
-    struct Row: Identifiable { let id = UUID(); var reps: Int; var weight: Double }
-
-    @State private var name = ""
-    @State private var rows: [Row] = [Row(reps: 10, weight: 0)]
-    @State private var rest = 90
-    @State private var didInit = false
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Exercise") {
-                    TextField("Name", text: $name)
-                }
-                Section("Sets") {
-                    ForEach(Array(rows.enumerated()), id: \.element.id) { i, _ in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Set \(i + 1)").font(.caption).foregroundStyle(.secondary)
-                            Stepper("Weight: \(Int(rows[i].weight)) lb", value: $rows[i].weight, in: 0...2000, step: 5)
-                            Stepper("Reps: \(rows[i].reps)", value: $rows[i].reps, in: 1...100)
-                        }
-                    }
-                    .onDelete { rows.remove(atOffsets: $0); if rows.isEmpty { rows = [Row(reps: 10, weight: 0)] } }
-                    Button {
-                        let last = rows.last ?? Row(reps: 10, weight: 0)
-                        rows.append(Row(reps: last.reps, weight: last.weight))
-                    } label: { Label("Add set (copies last)", systemImage: "plus.circle") }
-                    .disabled(rows.count >= 15)
-                }
-                Section("Cooldown between sets") {
-                    Stepper("\(rest)s", value: $rest, in: 0...600, step: 15)
-                }
-            }
-            .navigationTitle("Add Exercise")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
-                        onAdd(name, rows.map { ($0.reps, $0.weight) }, rest)
-                        dismiss()
-                    }.disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-            .onAppear { if !didInit { rest = defaultRest; didInit = true } }
-        }
-    }
-}
-
 // MARK: - Machine setting edit
 
 /// Editing a machine setting always saves to the exercise/machine definition
@@ -259,7 +205,7 @@ struct MachineSettingEditSheet: View {
         self.onDelete = onDelete
         _label = State(initialValue: setting.label)
         _useOther = State(initialValue: setting.numericValue == nil && (setting.otherText?.isEmpty == false))
-        _numeric = State(initialValue: setting.numericValue ?? 1)
+        _numeric = State(initialValue: setting.numericValue ?? 0)
         _other = State(initialValue: setting.otherText ?? "")
     }
 
@@ -276,7 +222,7 @@ struct MachineSettingEditSheet: View {
                         TextField("Custom value", text: $other)
                     } else {
                         Picker("Value", selection: $numeric) {
-                            ForEach(1...15, id: \.self) { Text("\($0)").tag($0) }
+                            ForEach(MachineSettingDefinition.valueRange, id: \.self) { Text("\($0)").tag($0) }
                         }
                         .pickerStyle(.wheel)
                     }

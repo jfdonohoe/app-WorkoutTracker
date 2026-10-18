@@ -18,11 +18,23 @@ struct DemoDataView: View {
     @Query(filter: #Predicate<Routine> { $0.sourceRaw == "user" }) private var userRoutines: [Routine]
     @Query(filter: #Predicate<WorkoutSession> { $0.sourceRaw == "user" }) private var userSessions: [WorkoutSession]
 
+    /// Persistent (UserDefaults) — see SeedDataService.autoSeedDisabledKey.
+    @AppStorage(SeedDataService.autoSeedDisabledKey) private var autoSeedDisabled = false
     @State private var showConfirm = false
     @State private var resultMessage: String?
+    /// The debug erase asks first: Debug builds run on the phone with real history.
+    @State private var showWipeConfirm = false
 
     var body: some View {
         List {
+            Section {
+                Toggle("Add demo data on launch", isOn: Binding(get: { !autoSeedDisabled },
+                                                                set: { autoSeedDisabled = !$0 }))
+            } footer: {
+                Text(autoSeedDisabled
+                     ? "Demo data will never be added automatically when the app starts. This stays off through app updates and new builds."
+                     : "When you have no data of your own, demo data is added automatically when the app starts.")
+            }
             Section("Demo data present") {
                 row("Demo routines", demoRoutines.count)
                 row("Demo sessions", demoSessions.count)
@@ -56,16 +68,24 @@ struct DemoDataView: View {
                     Label(resultMessage, systemImage: "checkmark.circle").foregroundStyle(Theme.statusGreen)
                 }
             } footer: {
-                Text("Deletes everything that started as demo data, including demo records you edited. Your own workouts are never touched.")
+                Text("Deletes everything that started as demo data, including demo records you edited. Your own workouts are never touched, and neither are workouts you finished or stopped on a demo routine: they become yours.")
             }
 
             #if DEBUG
             Section {
                 Button(role: .destructive) {
-                    DevTools.resetAndReseed(context)
-                    resultMessage = "Dev reset: erased everything and reseeded."
+                    showWipeConfirm = true
                 } label: {
                     Label("DEV: Erase ALL data & reseed", systemImage: "exclamationmark.triangle.fill")
+                }
+                .confirmationDialog("Erase ALL data?", isPresented: $showWipeConfirm, titleVisibility: .visible) {
+                    Button("Erase everything", role: .destructive) {
+                        DevTools.resetAndReseed(context)
+                        resultMessage = "Dev reset: erased everything and reseeded."
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Every workout, routine, exercise, correction and log on this device is deleted, including your own history. This can't be undone. Make a backup first.")
                 }
             } header: {
                 Text("Developer (debug builds only)")

@@ -37,7 +37,7 @@ struct RoutineListView: View {
             }
             ForEach(routines) { routine in
                 NavigationLink {
-                    RoutineEditorView(routine: routine)
+                    RoutineEditorView(routine: routine).toolbar(.hidden, for: .tabBar)
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {

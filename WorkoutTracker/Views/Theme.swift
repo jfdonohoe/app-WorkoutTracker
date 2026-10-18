@@ -6,6 +6,10 @@
 //  mirroring DesignSystem.html. Brand accent, the rest-timer barber-pole
 //  countdown colors, and the warm neutral backgrounds all live here.
 //
+//  The palette is light-only, so the app is locked to Light appearance
+//  (INFOPLIST_KEY_UIUserInterfaceStyle in project.yml and the Xcode project);
+//  these colors never meet Dark Mode.
+//
 
 import SwiftUI
 
@@ -22,6 +26,16 @@ enum Theme {
     static let stripeA = Color(red: 0x75/255, green: 0xB7/255, blue: 0x98/255)
     /// Pale barber-pole stripe (#EAEBDD).
     static let stripeB = Color(red: 0xEA/255, green: 0xEB/255, blue: 0xDD/255)
+
+    // MARK: In-card timers (RestRingTimer / GetReadyCountdown)
+    /// Rest ring panel wash — faint mint behind the ring (#F4FAF7).
+    static let restWash = Color(red: 0xF4/255, green: 0xFA/255, blue: 0xF7/255)
+    /// Rest ring caption and numerals — deep green (#0F5132).
+    static let restInk = Color(red: 0x0F/255, green: 0x51/255, blue: 0x32/255)
+    /// Get-ready countdown panel — light gray (#E5E5EA).
+    static let getReadyBackground = Color(red: 0xE5/255, green: 0xE5/255, blue: 0xEA/255)
+    /// An unlit start light (#C7C7CC).
+    static let lightOff = Color(red: 0xC7/255, green: 0xC7/255, blue: 0xCC/255)
 
     // MARK: Workout-runner action buttons (SetActionButtonLabel)
     /// "Complete Set" button fill — same green as "set completed" (#198754).
@@ -43,6 +57,9 @@ enum Theme {
     static let statusBlue = Color(red: 0x0D/255, green: 0x6E/255, blue: 0xFD/255)
     /// Neutral ink (#000000).
     static let statusBlack = Color.black
+    /// Non-interactive badge fill, e.g. the DEFAULT pill (#3A3A3C). Green is
+    /// reserved for things you can tap.
+    static let neutralBadge = Color(red: 0x3A/255, green: 0x3A/255, blue: 0x3C/255)
 
     // MARK: Neutrals
     /// Launch-screen brand green (#6E7A3F). MUST match the background colour in

@@ -8,8 +8,14 @@
 //  is machine-based, the machine's shared settings can be defined here too.
 //
 //  Used both when adding/editing an exercise in a routine and when adding an
-//  unplanned exercise mid-workout. It returns the built sets + rest via onSave;
-//  machine-setting edits are written straight to the shared Machine.
+//  unplanned exercise mid-workout. It returns the built sets + rest + chosen
+//  machine via onSave; machine-setting edits are written straight to the
+//  shared Machine.
+//
+//  When `allowsMachineChoice` is set and the exercise has more than one
+//  machine, a Machine picker chooses which one (the routine editor uses this
+//  to pick the routine's machine). Switching loads that machine's own default
+//  sets and settings.
 //
 
 import SwiftUI
@@ -29,13 +35,16 @@ struct SetBuilderSheet: View {
     let defaultRest: Int
     var initialSets: [(reps: Int, weight: Double)] = []
     var initialRest: Int? = nil
-    var onSave: (_ sets: [(reps: Int, weight: Double)], _ rest: Int) -> Void
+    /// Show a Machine picker when the exercise has several machines.
+    var allowsMachineChoice = false
+    var onSave: (_ sets: [(reps: Int, weight: Double)], _ rest: Int, _ machineId: UUID?) -> Void
 
     struct SetDraft: Identifiable { let id = UUID(); var reps: Int; var weight: Double }
 
     @State private var sets: [SetDraft] = []
     @State private var rest: Int = 90
     @State private var machine: Machine?
+    @State private var selectedMachineId: UUID?
     @State private var exercise: Exercise?
     @State private var showAddSetting = false
     @State private var otherEditDef: MachineSettingDefinition?
@@ -46,6 +55,7 @@ struct SetBuilderSheet: View {
         NavigationStack {
             List {
                 definitionSection
+                machinePickerSection
                 setsSection
                 if machine != nil { machineSection }
             }
@@ -55,7 +65,7 @@ struct SetBuilderSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        onSave(sets.map { ($0.reps, $0.weight) }, rest)
+                        onSave(sets.map { ($0.reps, $0.weight) }, rest, selectedMachineId)
                         dismiss()
                     }.disabled(sets.isEmpty)
                 }
@@ -73,9 +83,10 @@ struct SetBuilderSheet: View {
 
     @ViewBuilder
     private var definitionSection: some View {
-        if let exercise, exercise.photoData != nil || !exercise.notes.isEmpty {
+        let photo = exercise?.photo(on: selectedMachineId ?? exercise?.machineId, in: context)
+        if let exercise, photo != nil || !exercise.notes.isEmpty {
             Section {
-                if let data = exercise.photoData {
+                if let data = photo {
                     // Whole image (no crop); animates + loops if it's a GIF.
                     AnimatedImageView(data: data)
                         .aspectRatio(AnimatedImageView.aspectRatio(of: data), contentMode: .fit)
@@ -91,6 +102,38 @@ struct SetBuilderSheet: View {
         }
     }
 
+    // MARK: - Machine choice
+
+    @ViewBuilder
+    private var machinePickerSection: some View {
+        if allowsMachineChoice, let exercise, exercise.machineIds.count > 1, let current = selectedMachineId {
+            Section {
+                Picker("Machine", selection: Binding(get: { current }, set: { selectMachine($0) })) {
+                    ForEach(exercise.machineIds, id: \.self) { id in
+                        Text(machineName(id)).tag(id)
+                    }
+                }
+            } footer: {
+                Text("Each machine keeps its own weights and settings.")
+            }
+        }
+    }
+
+    private func machineName(_ id: UUID) -> String {
+        (try? context.fetch(FetchDescriptor<Machine>(predicate: #Predicate { $0.id == id })).first?.name) ?? "Machine"
+    }
+
+    /// Switch to another of the exercise's machines: load its sets + settings.
+    private func selectMachine(_ id: UUID) {
+        guard id != selectedMachineId else { return }
+        selectedMachineId = id
+        machine = try? context.fetch(FetchDescriptor<Machine>(predicate: #Predicate { $0.id == id })).first
+        if let exercise {
+            let planned = exercise.defaultSets(for: id)
+            sets = planned.isEmpty ? [SetDraft(reps: 10, weight: 0)] : planned.map { SetDraft(reps: $0.reps, weight: $0.weight) }
+        }
+    }
+
     // MARK: - Sets
 
     private var setsSection: some View {
@@ -98,7 +141,7 @@ struct SetBuilderSheet: View {
             ForEach(Array(sets.enumerated()), id: \.element.id) { index, _ in
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Set \(index + 1)").font(.subheadline.bold())
-                    stepper("Weight (lb)", value: $sets[index].weight, step: 5, range: 0...2000)
+                    stepper("Weight (\(WeightUnit.current.rawValue))", value: $sets[index].weight, step: 5, range: 0...2000)
                     stepperInt("Reps", value: $sets[index].reps, step: 1, range: 1...100)
                 }
                 .padding(.vertical, 2)
@@ -137,7 +180,7 @@ struct SetBuilderSheet: View {
                     .tint(.primary)
                     Spacer()
                     Menu {
-                        ForEach(1...15, id: \.self) { n in
+                        ForEach(MachineSettingDefinition.valueRange, id: \.self) { n in
                             Button("\(n)") { setDefValue(def, numeric: n, other: nil) }
                         }
                         Button("Other…") { otherEditDef = def }
@@ -199,11 +242,17 @@ struct SetBuilderSheet: View {
     private func load() {
         guard !didLoad else { return }
         didLoad = true
-        if let machineId {
-            machine = try? context.fetch(FetchDescriptor<Machine>(predicate: #Predicate { $0.id == machineId })).first
-        }
         if let exerciseId {
             exercise = try? context.fetch(FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == exerciseId })).first
+        }
+        // A machine no longer linked to the exercise falls back to its default.
+        if let exercise, let id = machineId, !exercise.machineIds.isEmpty, !exercise.machineIds.contains(id) {
+            selectedMachineId = exercise.machineId
+        } else {
+            selectedMachineId = machineId
+        }
+        if let machineId = selectedMachineId {
+            machine = try? context.fetch(FetchDescriptor<Machine>(predicate: #Predicate { $0.id == machineId })).first
         }
         if initialSets.isEmpty {
             sets = [SetDraft(reps: 10, weight: 0)]
@@ -217,7 +266,7 @@ struct SetBuilderSheet: View {
         def.numericValue = numeric
         def.otherText = other
         def.updatedAt = .now
-        if let machineId { CatalogSyncService(context).reconcileMachine(machineId) }
+        if let machineId = machine?.id { CatalogSyncService(context).reconcileMachine(machineId) }
         try? context.save()
     }
 
@@ -229,7 +278,7 @@ struct SetBuilderSheet: View {
         guard !trimmed.isEmpty else { return }
         def.label = trimmed
         def.updatedAt = .now
-        if let machineId { CatalogSyncService(context).reconcileMachine(machineId) }
+        if let machineId = machine?.id { CatalogSyncService(context).reconcileMachine(machineId) }
         try? context.save()
     }
 
@@ -238,7 +287,7 @@ struct SetBuilderSheet: View {
     private func deleteDef(_ def: MachineSettingDefinition) {
         def.deletedAt = .now
         def.updatedAt = .now
-        if let machineId { CatalogSyncService(context).reconcileMachine(machineId) }
+        if let machineId = machine?.id { CatalogSyncService(context).reconcileMachine(machineId) }
         try? context.save()
     }
 

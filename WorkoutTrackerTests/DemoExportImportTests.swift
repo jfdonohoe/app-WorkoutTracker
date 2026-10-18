@@ -34,6 +34,39 @@ final class DemoExportImportTests: XCTestCase {
         XCTAssertTrue(remainingDemoSessions.isEmpty)
     }
 
+    // 13b. Demo data comes from the bundled definitions, uses fresh ids every
+    // seed, carries no YMCA branding, and is fully removed by demo deletion.
+    func test13b_demoSeedsBundledDefinitions() throws {
+        let doc = try XCTUnwrap(SeedDataService.loadDemoDefinitions())
+        let again = try XCTUnwrap(SeedDataService.loadDemoDefinitions())
+        XCTAssertEqual(doc.routines.count, 2)
+        XCTAssertTrue(Set(doc.routines.map(\.id)).isDisjoint(with: again.routines.map(\.id)))
+
+        let ctx = TestSupport.makeContext()
+        SeedDataService(ctx).seed()
+        try ctx.save()
+        let routines = try ctx.fetch(FetchDescriptor<Routine>())
+        XCTAssertEqual(Set(routines.map(\.name)),
+                       ["Strength Workout A (Weeks 1-6)", "Strength Workout B (Weeks 1-6)"])
+        XCTAssertTrue(routines.allSatisfy { $0.versions.count == 1 && $0.activeVersion != nil })
+        let exercises = try ctx.fetch(FetchDescriptor<Exercise>())
+        XCTAssertEqual(exercises.count, doc.exercises.count)
+        XCTAssertFalse(exercises.contains { $0.name.localizedCaseInsensitiveContains("YMCA") })
+        XCTAssertTrue(exercises.allSatisfy { $0.source == .seedDemo })
+        // Every routine exercise resolves to a seeded exercise.
+        let exerciseIds = Set(exercises.map(\.id))
+        let routineExerciseIds = routines.flatMap { $0.activeVersion?.sections ?? [] }.flatMap(\.exercises).map(\.exerciseId)
+        XCTAssertFalse(routineExerciseIds.isEmpty)
+        XCTAssertTrue(routineExerciseIds.allSatisfy(exerciseIds.contains))
+        XCTAssertEqual(try ctx.fetchCount(FetchDescriptor<AuditEvent>(predicate: #Predicate { $0.type == "import.performed" })), 0)
+
+        DemoDataManager(ctx).deleteAllDemoData()
+        try ctx.save()
+        XCTAssertEqual(try ctx.fetchCount(FetchDescriptor<Exercise>()), 0)
+        XCTAssertEqual(try ctx.fetchCount(FetchDescriptor<Machine>()), 0)
+        XCTAssertEqual(try ctx.fetchCount(FetchDescriptor<Routine>()), 0)
+    }
+
     // 14. User-created data remains after demo data deletion.
     func test14_userDataRemainsAfterDemoDeletion() throws {
         let ctx = TestSupport.makeContext()
@@ -41,6 +74,9 @@ final class DemoExportImportTests: XCTestCase {
         let (userRoutine, _, _) = TestSupport.buildRoutine(ctx, name: "My Routine")
         let workouts = WorkoutRepository(ctx)
         let userSession = workouts.startWorkout(from: userRoutine)
+        // One set done: a workout with nothing done is discarded, not kept.
+        let userSet = try XCTUnwrap(userSession.exercises.first?.orderedSets.first)
+        workouts.completeSet(userSet, in: userSession, actualWeight: 100, actualReps: 10)
         workouts.finishWorkout(userSession)
         // Demo data.
         SeedDataService(ctx).seed()
@@ -83,6 +119,9 @@ final class DemoExportImportTests: XCTestCase {
         let (routine, _, _) = TestSupport.buildRoutine(ctx1, name: "Source", weight: 100)
         let workouts = WorkoutRepository(ctx1)
         let session = workouts.startWorkout(from: routine)
+        // One set done: a workout with nothing done is discarded, not kept.
+        let set = try XCTUnwrap(session.exercises.first?.orderedSets.first)
+        workouts.completeSet(set, in: session, actualWeight: 100, actualReps: 10)
         workouts.finishWorkout(session)
         try ctx1.save()
         let data = try ExportImportService(ctx1).exportJSONData()

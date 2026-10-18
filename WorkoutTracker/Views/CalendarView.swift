@@ -3,7 +3,7 @@
 //  WorkoutTracker
 //
 //  Screen 7. A month grid marking past workouts (completed / partial / missed /
-//  abandoned) and future scheduled days. Selecting a day shows its detail and a
+//  abandoned) and future scheduled days. Selecting a day shows its detail and arun 
 //  link to the read-only history. Future sessions are NOT created here — only
 //  when the user actually starts one (per spec).
 //
@@ -19,14 +19,11 @@ struct CalendarView: View {
 
     @State private var monthAnchor = Date()
     @State private var selectedDay = Calendar.current.startOfDay(for: .now)
-    @State private var current: WorkoutSession?
-    @State private var showActive = false
     @State private var showSchedule = false
     @State private var newRoutineToEdit: Routine?
     @State private var instanceEdit: InstanceEdit?
     @State private var pendingInstanceScope: InstanceEdit?
     @State private var pendingSchedDelete: SchedDelete?
-    @EnvironmentObject private var restTimer: RestTimerService
     /// Catalog reconciliation is a defensive full-sweep safety net (drift can
     /// only enter via import/demo-seed, both handled at launch) — run it once
     /// per session, not on every tab-switch `onAppear`.
@@ -68,11 +65,6 @@ struct CalendarView: View {
                 let sync = CatalogSyncService(context)
                 for routine in routines { sync.reconcileRoutine(routine) }
                 try? context.save()
-            }
-            .fullScreenCover(isPresented: $showActive) {
-                if let current {
-                    ActiveWorkoutView(session: current).environmentObject(restTimer)
-                }
             }
             .sheet(isPresented: $showSchedule) { ScheduleWorkoutSheet(initialDate: selectedDay) }
             .sheet(item: $newRoutineToEdit) { r in
@@ -122,7 +114,7 @@ struct CalendarView: View {
         let d = cal.startOfDay(for: day)
         let rule = ScheduleRule(routineId: routine.id, freq: .weekly, interval: 1,
                                 weekdays: [cal.component(.weekday, from: d)],
-                                startDate: d, untilDate: d, source: .user)
+                                startDate: d, untilDate: d, source: routine.source)
         context.insert(rule)
         try? context.save()
     }
@@ -141,10 +133,18 @@ struct CalendarView: View {
 
     private var weekdayHeader: some View {
         HStack {
-            ForEach(cal.shortWeekdaySymbols, id: \.self) { s in
+            ForEach(Array(Self.weekdaySymbols(for: cal).enumerated()), id: \.offset) { _, s in
                 Text(s).font(.caption).frame(maxWidth: .infinity).foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// Weekday labels starting at the calendar's first weekday, matching the
+    /// grid in monthDays (Monday-first regions start on Monday).
+    static func weekdaySymbols(for cal: Calendar) -> [String] {
+        let symbols = cal.shortWeekdaySymbols   // always Sunday-first
+        let start = cal.firstWeekday - 1
+        return Array(symbols[start...] + symbols[..<start])
     }
 
     private var monthGrid: some View {
@@ -231,7 +231,7 @@ struct CalendarView: View {
                     // Day details surface "Abandoned" sessions as "Partial".
                     let shown: SessionStatus = session.status == .abandoned ? .partial : session.status
                     NavigationLink {
-                        WorkoutHistoryDetailView(session: session)
+                        WorkoutHistoryDetailView(session: session).toolbar(.hidden, for: .tabBar)
                     } label: {
                         HStack {
                             Circle().fill(statusColor(shown)).frame(width: 8, height: 8)
@@ -288,7 +288,7 @@ struct CalendarView: View {
             }
             let oneOff = ScheduleRule(routineId: edit.clone.id, freq: .weekly, interval: 1,
                                       weekdays: [cal.component(.weekday, from: day)],
-                                      startDate: day, untilDate: day, source: .user)
+                                      startDate: day, untilDate: day, source: edit.clone.source)
             context.insert(oneOff)
         } else {
             // Apply to all future recurrences: copy the clone's content into the
@@ -431,15 +431,5 @@ struct CalendarView: View {
             cursor = cal.date(byAdding: .day, value: 1, to: cursor) ?? interval.end
         }
         return days
-    }
-
-    private func start(_ routine: Routine, on day: Date) {
-        let repo = WorkoutRepository(context)
-        // Anchor the session to the selected day (noon to avoid TZ edge cases).
-        let when = cal.date(bySettingHour: 12, minute: 0, second: 0, of: day) ?? day
-        let session = repo.startWorkout(from: routine, scheduledDate: when, now: when)
-        try? context.save()
-        current = session
-        showActive = true
     }
 }

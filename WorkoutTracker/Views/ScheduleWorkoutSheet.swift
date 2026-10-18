@@ -34,6 +34,10 @@ struct ScheduleWorkoutSheet: View {
     @State private var count = 10
     @State private var didInit = false
     @State private var showSaveAsNew = false
+    /// Routines made with "New Routine" in this sheet. Any not scheduled are
+    /// discarded when the sheet closes, as the routine editor's Cancel does.
+    @State private var createdRoutineIds: Set<UUID> = []
+    @State private var didCommit = false
 
     private var repo: RoutineRepository { RoutineRepository(context) }
     private var selectedRoutine: Routine? { routines.first { $0.id == selectedRoutineId } }
@@ -75,6 +79,9 @@ struct ScheduleWorkoutSheet: View {
                 }
             }
         }
+        // On the stack, not the Form: the Form also disappears when "Edit
+        // routine" pushes the editor, and the routine being edited must stay.
+        .onDisappear { if !didCommit { discardCreatedRoutines(keeping: nil) } }
     }
 
     // MARK: - Routine
@@ -188,8 +195,18 @@ struct ScheduleWorkoutSheet: View {
         let routine = repo.createRoutine(name: "New Routine")
         if let v = routine.activeVersion { repo.addSection(to: v, type: .strength) }
         try? context.save()
+        createdRoutineIds.insert(routine.id)
         selectedRoutineId = routine.id
         routineEditSnapshot = routine.updatedAt
+    }
+
+    private func discardCreatedRoutines(keeping keep: UUID?) {
+        guard !createdRoutineIds.isEmpty else { return }
+        let ids = createdRoutineIds
+        let made = (try? context.fetch(FetchDescriptor<Routine>(predicate: #Predicate { ids.contains($0.id) }))) ?? []
+        for routine in made where routine.id != keep { context.delete(routine) }
+        createdRoutineIds = []
+        try? context.save()
     }
 
     private func onSchedule() {
@@ -210,13 +227,16 @@ struct ScheduleWorkoutSheet: View {
         } else {
             targetId = original.id
         }
-        let rule = buildRule(routineId: targetId)
+        // A schedule belongs to its routine's demo/user side.
+        let rule = buildRule(routineId: targetId, source: original.source)
         context.insert(rule)
         try? context.save()
+        didCommit = true
+        discardCreatedRoutines(keeping: targetId)
         dismiss()
     }
 
-    private func buildRule(routineId: UUID) -> ScheduleRule {
+    private func buildRule(routineId: UUID, source: DataSource = .user) -> ScheduleRule {
         let cal = Calendar.current
         let day = cal.startOfDay(for: startDate)
         let wds: [Int] = freq == .weekly
@@ -227,6 +247,6 @@ struct ScheduleWorkoutSheet: View {
         let byMonthDay: Int? = freq == .monthly ? cal.component(.day, from: day) : nil
         return ScheduleRule(routineId: routineId, freq: freq, interval: interval,
                             weekdays: wds, startDate: day, untilDate: until,
-                            count: cnt, byMonthDay: byMonthDay, source: .user)
+                            count: cnt, byMonthDay: byMonthDay, source: source)
     }
 }

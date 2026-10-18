@@ -35,11 +35,27 @@ final class NotificationService {
         let content = UNMutableNotificationContent()
         content.title = "Rest complete"
         content.body = "Time for your next set."
-        content.sound = .default
+        content.sound = WorkoutSettings.timerSounds ? .default : nil   // Settings ▸ Timer sounds
 
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(seconds), repeats: false)
         let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
         center.add(request)
+    }
+
+    /// Schedule a general timer alert `seconds` from now (guided cardio /
+    /// stretch timers).
+    func schedule(id: String, after seconds: Int, title: String, body: String) {
+        guard seconds > 0 else { return }
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [id])
+
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = WorkoutSettings.timerSounds ? .default : nil   // Settings ▸ Timer sounds
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(seconds), repeats: false)
+        center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
     }
 
     func cancel(id: String) {

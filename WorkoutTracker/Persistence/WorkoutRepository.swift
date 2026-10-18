@@ -48,9 +48,8 @@ struct WorkoutRepository {
         context.insert(session)
 
         if let version {
-            // Seed the session-level cooldown defaults from the routine.
-            session.restBetweenExercises = version.defaultRestBetweenExercises
-            session.restBetweenSets = version.defaultRestBetweenSets
+            // Seed the session's rests (per exercise type) from the routine.
+            session.rests = version.rests
 
             // Each routine section becomes its own group instance, so a routine
             // with two strength sections keeps two strength groups in the workout.
@@ -85,10 +84,13 @@ struct WorkoutRepository {
         // (CatalogSyncService) — read the live definition directly here too, as
         // defense-in-depth in case reconciliation hasn't run since the last edit.
         let def = fetchExercise(re.exerciseId)
+        // A workout starts on the exercise's default (first) machine; the
+        // user switches during the workout if it's taken.
+        let machineId = def?.machineId ?? re.machineId
 
         let se = WorkoutSessionExercise(sourceRoutineExerciseId: re.id,
                                         exerciseId: re.exerciseId,
-                                        machineId: re.machineId,
+                                        machineId: machineId,
                                         name: def?.name ?? re.displayName,
                                         sectionType: sectionType,
                                         order: order,
@@ -100,50 +102,45 @@ struct WorkoutRepository {
         // Snapshot the group-specific prescription from the exercise definition
         // (cardio: duration/intensity; stretching: hold/sides/rounds).
         if let def {
-            switch sectionType {
-            case .cardio:
-                se.durationMinutes = def.durationMinutes
-                se.intensity = def.intensity
-            case .stretching:
-                se.holdSeconds = def.holdSeconds
-                se.sides = def.sides
-                se.rounds = def.rounds
-            case .strength:
-                break
-            }
+            se.snapshotGroupFields(from: def)
+            se.snapshotStructure(from: def)
         }
 
-        // Snapshot planned sets — from the catalog definition when available,
-        // else the routine's own (reconciled) mirror.
+        // Snapshot planned sets — from the catalog definition (for that
+        // machine) when available, else the routine's own mirror.
         let plannedSets: [(reps: Int, weight: Double)]
-        if let def, !def.effectiveDefaultSets.isEmpty {
-            plannedSets = def.effectiveDefaultSets
+        let fromDefinition = def?.defaultSets(for: machineId) ?? []
+        if !fromDefinition.isEmpty {
+            plannedSets = fromDefinition
         } else {
             plannedSets = re.effectivePlannedSets
         }
-        for (i, planned) in plannedSets.enumerated() {
+        // A per-side exercise gets a set for each side, cycling within a set.
+        for (i, planned) in SidePlan.expand(plannedSets, sides: se.sideLabels).enumerated() {
             let set = WorkoutSessionSet(index: i,
                                         plannedWeight: planned.weight,
                                         plannedReps: planned.reps)
+            set.side = planned.side
             set.exercise = se
             se.sets.append(set)
             context.insert(set)
         }
 
-        // Snapshot machine settings (shared on the machine, frozen here).
-        if let machineId = re.machineId, let machine = fetchMachine(machineId) {
-            for def in machine.activeSettings {
-                let snap = SessionMachineSetting(definitionId: def.id,
-                                                 label: def.label,
-                                                 order: def.order,
-                                                 numericValue: def.numericValue,
-                                                 otherText: def.otherText)
-                snap.exercise = se
-                se.machineSettings.append(snap)
-                context.insert(snap)
-            }
-        }
+        snapshotMachineSettings(of: machineId, into: se)
         return se
+    }
+
+    /// Snapshot a machine's current settings into a workout exercise (shared
+    /// on the machine, frozen here).
+    private func snapshotMachineSettings(of machineId: UUID?, into se: WorkoutSessionExercise) {
+        guard let machineId, let machine = fetchMachine(machineId) else { return }
+        for def in machine.activeSettings {
+            let snap = SessionMachineSetting(definitionId: def.id, label: def.label, order: def.order,
+                                             numericValue: def.numericValue, otherText: def.otherText)
+            snap.exercise = se
+            se.machineSettings.append(snap)
+            context.insert(snap)
+        }
     }
 
     func fetchMachine(_ id: UUID) -> Machine? {
@@ -262,7 +259,9 @@ struct WorkoutRepository {
         }
         if total > 0 && done == total {
             session.status = .completed
-        } else if done > 0 {
+        } else if done > 0 || session.hasAnythingDone {
+            // hasAnythingDone also counts a logged distance on an exercise not
+            // yet marked complete, so finishing it locks history as partial.
             session.status = .partial
         } else {
             // Started but nothing completed yet — stays started until finished.
@@ -271,13 +270,24 @@ struct WorkoutRepository {
     }
 
     /// Finish the workout: assign a terminal status and LOCK it as history.
-    /// completed / partial / abandoned all become immutable.
+    /// completed / partial become immutable history. A workout with nothing
+    /// done is not history at all: it is discarded — hidden at once
+    /// (deletedAt, so the screen still showing it can finish tearing down) and
+    /// removed for good by purgeDiscardedWorkouts at the next launch.
     func finishWorkout(_ session: WorkoutSession, now: Date = .now) {
         recomputeStatus(session)
-        let anyDone = session.exercises.flatMap(\.sets).contains(where: \.isCompleted)
-            || session.exercises.contains { !$0.hasSets && $0.markedCompleteAt != nil }
-        if !anyDone {
+        if !session.hasAnythingDone {
             session.status = .abandoned
+            session.endedAt = now
+            session.completedAt = now
+            session.deletedAt = now
+            session.updatedAt = now
+            lock(session, now: now)
+            Audit.log(context, type: "session.discarded", entity: "WorkoutSession",
+                      entityId: session.id,
+                      summary: "Discarded \(session.routineName): nothing was done",
+                      source: session.source)
+            return
         }
         session.endedAt = now      // end timecode
         session.completedAt = now
@@ -287,6 +297,62 @@ struct WorkoutRepository {
                   entityId: session.id,
                   summary: "Finished \(session.routineName) as \(session.status.displayName)",
                   source: session.source)
+    }
+
+    /// Permanently remove abandoned workouts: ones with nothing done that were
+    /// discarded (finishWorkout hides them at once), or left unfinished on an
+    /// earlier day — e.g. stopped from the Calendar, or a past-day workout
+    /// started and never logged. Anything with a set done or an exercise
+    /// marked complete is never touched. Today's are kept until tomorrow: a
+    /// discarded workout still on record for today is what stops Today from
+    /// auto-starting the same scheduled routine again
+    /// (TodayWorkoutView.routineToAutoStart). Run at every launch and after
+    /// every import. Returns the number removed.
+    @discardableResult
+    func purgeDiscardedWorkouts(now: Date = .now) -> Int {
+        let startOfToday = Calendar.current.startOfDay(for: now)
+        let abandoned = SessionStatus.abandoned.rawValue
+        // Cheap tests first (in the store, then dates); only the few left get
+        // `hasAnythingDone`, which loads their exercises and sets — so a
+        // launch doesn't load all of history.
+        let candidates = (try? context.fetch(FetchDescriptor<WorkoutSession>(
+            predicate: #Predicate { $0.completedAt == nil || $0.statusRaw == abandoned }))) ?? []
+        let found = candidates.filter { s in
+            (s.startedAt ?? s.createdAt) < startOfToday && !s.hasAnythingDone
+        }
+        for s in found { context.delete(s) }   // cascades to its exercises, sets and corrections
+        if !found.isEmpty {
+            Audit.log(context, type: "data.repaired", entity: "WorkoutSession",
+                      summary: "Removed \(found.count) abandoned workout(s)")
+        }
+        return found.count
+    }
+
+    /// Change a workout's rest from the workout screen. Rest is set per
+    /// routine, so the change also updates the routine for every future
+    /// workout. The routine's current plan is edited through editRoutine: if
+    /// workouts were already done with it, a new version is made so their
+    /// record keeps the rest they were done with. Nil leaves a value as is.
+    func setRest(_ session: WorkoutSession, betweenSets: Int? = nil, betweenExercises: Int? = nil) {
+        var rests = session.rests
+        if let betweenSets { rests.strengthSets = betweenSets }
+        if let betweenExercises { rests.strengthExercises = betweenExercises }
+        setRests(session, rests)
+    }
+
+    /// Change the workout's rests; the routine gets them too, for future
+    /// workouts (a new version only if something differs).
+    func setRests(_ session: WorkoutSession, _ rests: TypeRests) {
+        guard !session.isLocked else { return }
+        session.rests = rests
+        session.updatedAt = .now
+        guard let rid = session.routineId,
+              let routine = try? context.fetch(FetchDescriptor<Routine>(predicate: #Predicate { $0.id == rid })).first,
+              routine.deletedAt == nil, let current = routine.activeVersion,
+              current.rests != rests else { return }
+        RoutineRepository(context).editRoutine(routine, note: "Rest changed during a workout") { version in
+            version.rests = rests
+        }
     }
 
     /// Soft-delete a workout from history (used by the calendar). We keep the
@@ -305,12 +371,26 @@ struct WorkoutRepository {
     func lock(_ session: WorkoutSession, now: Date = .now) {
         guard session.lockedAt == nil else { return }
         session.lockedAt = now
+        // Keep a unit already recorded (Data Safety's finish re-locks).
+        if session.distanceUnitRaw.isEmpty { session.distanceUnitRaw = DistanceUnit.current.rawValue }
     }
 
-    /// Reopen a finished-but-incomplete (partial/abandoned) workout so the user
-    /// can return to it. Clears the lock + end timecodes and recomputes status.
+    /// Give workouts locked before the distance unit was recorded the unit
+    /// they are shown in now, so a later Settings change can't relabel them.
+    /// It only records what is already displayed. Run at launch; returns how many.
+    @discardableResult
+    func freezeDistanceUnits() -> Int {
+        let open = (try? context.fetch(FetchDescriptor<WorkoutSession>(
+            predicate: #Predicate { $0.lockedAt != nil && $0.distanceUnitRaw == "" }))) ?? []
+        for s in open { s.distanceUnitRaw = DistanceUnit.current.rawValue }
+        return open.count
+    }
+
+    /// Reopen an unfinished workout that was marked abandoned while still open
+    /// (Data Safety's Resume). A LOCKED workout is never reopened: it keeps
+    /// the values it had when it was locked, forever.
     func reopen(_ session: WorkoutSession, now: Date = .now) {
-        session.lockedAt = nil
+        guard !session.isLocked else { return }
         session.completedAt = nil
         session.endedAt = nil
         session.updatedAt = now
@@ -318,40 +398,6 @@ struct WorkoutRepository {
     }
 
     // MARK: - During-workout structural edits
-
-    /// Add an unplanned exercise to the active session (does not touch routine).
-    /// Accepts per-set planned values built with the set-by-set editor.
-    @discardableResult
-    func addUnplannedExercise(to session: WorkoutSession,
-                              name: String,
-                              sets: [(reps: Int, weight: Double)],
-                              rest: Int = 90,
-                              machineId: UUID? = nil) -> WorkoutSessionExercise {
-        guard !session.isLocked else {
-            assertionFailure("Locked session.")
-            return WorkoutSessionExercise(name: name, sectionType: .strength, order: 0, plannedRestBetweenSets: rest)
-        }
-        let order = (session.exercises.map(\.order).max() ?? -1) + 1
-        let se = WorkoutSessionExercise(exerciseId: nil,
-                                        machineId: machineId,
-                                        name: name,
-                                        sectionType: .strength,
-                                        order: order,
-                                        plannedRestBetweenSets: rest,
-                                        isAddedDuringWorkout: true)
-        se.session = session
-        session.exercises.append(se)
-        context.insert(se)
-        let planned = sets.isEmpty ? [(reps: 10, weight: 0.0)] : sets
-        for (i, p) in planned.enumerated() {
-            let set = WorkoutSessionSet(index: i, plannedWeight: p.weight, plannedReps: p.reps)
-            set.exercise = se
-            se.sets.append(set)
-            context.insert(set)
-        }
-        session.updatedAt = .now
-        return se
-    }
 
     /// Add a library exercise to the active session mid-workout, snapshotting its
     /// group-specific prescription (strength sets / cardio duration+intensity /
@@ -376,36 +422,23 @@ struct WorkoutRepository {
         se.session = session
         session.exercises.append(se)
         context.insert(se)
+        se.snapshotStructure(from: exercise)
 
-        switch group {
-        case .strength:
+        // Set-based kinds (strength, and cardio Calisthenics) get sets, one
+        // per side for a per-side exercise.
+        if group == .strength || exercise.kind?.usesSets == true {
             let planned = exercise.effectiveDefaultSets.isEmpty
                 ? [(reps: 10, weight: 0.0)] : exercise.effectiveDefaultSets
-            for (i, p) in planned.enumerated() {
+            for (i, p) in SidePlan.expand(planned, sides: se.sideLabels).enumerated() {
                 let set = WorkoutSessionSet(index: i, plannedWeight: p.weight, plannedReps: p.reps)
+                set.side = p.side
                 set.exercise = se
                 se.sets.append(set)
                 context.insert(set)
             }
-        case .cardio:
-            se.durationMinutes = exercise.durationMinutes
-            se.intensity = exercise.intensity
-        case .stretching:
-            se.holdSeconds = exercise.holdSeconds
-            se.sides = exercise.sides
-            se.rounds = exercise.rounds
         }
-
-        // Snapshot the machine's current settings (shared on the machine, frozen here).
-        if let machineId = exercise.machineId, let machine = fetchMachine(machineId) {
-            for def in machine.activeSettings {
-                let snap = SessionMachineSetting(definitionId: def.id, label: def.label, order: def.order,
-                                                 numericValue: def.numericValue, otherText: def.otherText)
-                snap.exercise = se
-                se.machineSettings.append(snap)
-                context.insert(snap)
-            }
-        }
+        se.snapshotGroupFields(from: exercise)
+        snapshotMachineSettings(of: exercise.machineId, into: se)
         session.updatedAt = .now
         return se
     }
@@ -453,10 +486,28 @@ struct WorkoutRepository {
 
     // MARK: - Machine settings during a workout
 
+    /// Switch an in-progress exercise to another of its machines, for THIS
+    /// workout only (the routine keeps its own choice). Completed sets are
+    /// kept; the remaining sets are re-planned from that machine's defaults and
+    /// the machine settings are replaced with the new machine's.
+    func switchMachine(_ exercise: WorkoutSessionExercise, to machineId: UUID, in session: WorkoutSession) {
+        guard !session.isLocked, exercise.machineId != machineId,
+              let machine = fetchMachine(machineId), machine.deletedAt == nil else { return }
+        exercise.machineId = machineId
+        let sync = CatalogSyncService(context)
+        if let exerciseId = exercise.exerciseId {
+            sync.reconcileExercise(exerciseId)   // re-plans sets + settings for the new machine
+        } else {
+            sync.reconcileMachine(machineId)
+        }
+        session.updatedAt = .now
+    }
+
     /// Update a snapshot machine setting for THIS workout only.
     func updateSessionSetting(_ setting: SessionMachineSetting,
                               numericValue: Int?,
                               otherText: String?) {
+        guard setting.exercise?.session?.isLocked != true else { return }
         setting.numericValue = numericValue
         setting.otherText = otherText
     }
@@ -470,7 +521,7 @@ struct WorkoutRepository {
                        to newLabel: String,
                        in exercise: WorkoutSessionExercise) {
         let trimmed = newLabel.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, exercise.session?.isLocked != true else { return }
         setting.label = trimmed
         if let defId = setting.definitionId {
             let d = FetchDescriptor<MachineSettingDefinition>(predicate: #Predicate { $0.id == defId })
@@ -503,6 +554,7 @@ struct WorkoutRepository {
     /// snapshot. Ad hoc settings (added mid-workout without "also add to
     /// machine") have no shared definition and are simply removed here.
     func deleteSetting(_ setting: SessionMachineSetting, from exercise: WorkoutSessionExercise) {
+        guard exercise.session?.isLocked != true else { return }
         if let defId = setting.definitionId,
            let def = try? context.fetch(
              FetchDescriptor<MachineSettingDefinition>(predicate: #Predicate { $0.id == defId })
@@ -521,7 +573,9 @@ struct WorkoutRepository {
 
     /// Remove every session exercise referencing `exerciseId` from every
     /// not-yet-locked ("current") workout session. Locked (finished) history is
-    /// never touched. Called when an exercise is deleted from the library.
+    /// never touched, and neither is an exercise with work logged on it (a
+    /// done set, marked complete, a distance): that work is kept. Called when
+    /// an exercise is deleted from the library.
     func removeExerciseFromActiveSessions(exerciseId: UUID) {
         let eid: UUID? = exerciseId
         let descriptor = FetchDescriptor<WorkoutSessionExercise>(predicate: #Predicate { $0.exerciseId == eid })
@@ -529,8 +583,10 @@ struct WorkoutRepository {
         var touchedIds = Set<UUID>()
         var sessions: [WorkoutSession] = []
         for se in matches {
-            guard let session = se.session, !session.isLocked else { continue }
+            guard let session = se.session, !session.isLocked, !se.hasWorkDone else { continue }
             if touchedIds.insert(session.id).inserted { sessions.append(session) }
+            // Detach before deleting: recomputeStatus below walks session.exercises.
+            session.exercises.removeAll { $0.id == se.id }
             context.delete(se)
         }
         for session in sessions {
@@ -544,12 +600,14 @@ struct WorkoutRepository {
     /// in that case, reconciling pulls the new definition into THIS exercise
     /// (and every other in-progress session on the same machine) rather than
     /// inserting a second, separately-tracked copy for this exercise.
+    /// Nil for a locked workout, which holds its values forever.
     @discardableResult
     func addSessionSetting(to exercise: WorkoutSessionExercise,
                            label: String,
                            numericValue: Int?,
                            otherText: String?,
-                           alsoAddToMachine: Bool) -> SessionMachineSetting {
+                           alsoAddToMachine: Bool) -> SessionMachineSetting? {
+        guard exercise.session?.isLocked != true else { return nil }
         let order = (exercise.machineSettings.map(\.order).max() ?? -1) + 1
         if alsoAddToMachine, let machineId = exercise.machineId, let machine = fetchMachine(machineId),
            machine.activeSettings.count < Machine.maxSettings {

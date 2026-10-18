@@ -26,6 +26,8 @@ final class RestTimerService: ObservableObject {
 
     /// Label of the upcoming set, shown while resting.
     @Published var upcomingSummary: String = ""
+    /// What this rest is, for the peek sheet's caption ("Rest between sets").
+    @Published private(set) var title: String = "Rest"
 
     private var endDate: Date?
     private var pausedRemaining: Int?
@@ -33,14 +35,17 @@ final class RestTimerService: ObservableObject {
     private let notifications: NotificationService
 
     private let notificationId = "rest-timer"
+    /// How many final seconds of a rest get a countdown beep.
+    static let countdownBeepSeconds = 5
 
     init(notifications: NotificationService = .shared) {
         self.notifications = notifications
     }
 
     /// Start a fresh countdown.
-    func start(seconds: Int, upcoming: String = "") {
+    func start(seconds: Int, upcoming: String = "", title: String = "Rest") {
         guard seconds > 0 else { return }
+        self.title = title
         totalSeconds = seconds
         remainingSeconds = seconds
         upcomingSummary = upcoming
@@ -88,9 +93,10 @@ final class RestTimerService: ObservableObject {
         ticker?.cancel()
         totalSeconds = seconds
         if wasRunning {
-            start(seconds: seconds, upcoming: upcomingSummary)
+            start(seconds: seconds, upcoming: upcomingSummary, title: title)
         } else {
             remainingSeconds = seconds
+            if pausedRemaining != nil { pausedRemaining = seconds }   // Resume continues from the new length
         }
     }
 
@@ -98,6 +104,7 @@ final class RestTimerService: ObservableObject {
         ticker?.cancel()
         isRunning = false
         endDate = nil
+        pausedRemaining = nil
         notifications.cancel(id: notificationId)
     }
 
@@ -121,18 +128,27 @@ final class RestTimerService: ObservableObject {
             // Only publish when the whole-second value actually changes, so views
             // observing the timer don't re-render 4×/sec for no visible change.
             remainingSeconds = remaining
+            // Raceway countdown: a low beep on each of the last 5 seconds; the
+            // high "go" beep at zero (fireCompletionFeedback) ends it.
+            if (1...Self.countdownBeepSeconds).contains(remaining) {
+                SoundCues.shared.lowBeep()
+            }
         }
     }
 
-    /// Audible chime + haptic buzz when the countdown reaches zero in foreground.
-    /// (A local notification covers the backgrounded/locked case separately.)
+    /// The high "go" beep + haptic when the countdown reaches zero in
+    /// foreground, as at the end of a stretch's get-ready. (A local
+    /// notification covers the backgrounded/locked case separately.)
     private func fireCompletionFeedback() {
-        AudioServicesPlaySystemSound(1322) // short alert chime
-        #if canImport(UIKit)
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(.success)
-        #endif
+        SoundCues.shared.highBeep()
     }
+
+    /// Paused part-way through (Resume continues it).
+    /// (Paused with nothing left counts as over: Resume can't continue it.)
+    var isPaused: Bool { !isRunning && (pausedRemaining ?? 0) > 0 }
+
+    /// Running or paused: the rest still holds the set's action slot.
+    var isActive: Bool { isRunning || isPaused }
 
     var formattedRemaining: String {
         let m = remainingSeconds / 60
@@ -144,9 +160,4 @@ final class RestTimerService: ObservableObject {
         guard totalSeconds > 0 else { return 0 }
         return 1.0 - (Double(remainingSeconds) / Double(totalSeconds))
     }
-
-    /// Absolute end instant of the running countdown (nil when stopped/reset).
-    /// Lets the UI drive one smooth reveal over the whole remaining time instead
-    /// of re-animating every second.
-    var endInstant: Date? { endDate }
 }

@@ -149,17 +149,36 @@ final class CatalogSyncTests: XCTestCase {
 
     // Reconciling a routine's exercises never forks a RoutineVersion — settings
     // are a live mirror, not versioned content.
-    func testReconcileRoutineDoesNotForkVersion() throws {
+    /// A library change goes into a NEW version when a workout was started
+    /// from the active one; the old version keeps what that workout used.
+    func testReconcileForksAVersionAWorkoutUses() throws {
         let ctx = TestSupport.makeContext()
         let (routine, exercise, _) = TestSupport.buildRoutine(ctx, weight: 100)
-        _ = WorkoutRepository(ctx).startWorkout(from: routine)
+        RoutineRepository(ctx).updateExerciseDefaults(exerciseId: exercise.id, sets: Array(repeating: (reps: 10, weight: 100), count: 3))
+        CatalogSyncService(ctx).reconcileRoutine(routine)
+        TestSupport.finishWithOneSetDone(ctx, routine)
         try ctx.save()
-        XCTAssertEqual(routine.versions.count, 1)
+        let original = try XCTUnwrap(routine.activeVersion)
+        CatalogSyncService(ctx).reconcileRoutine(routine)   // nothing changed yet
+        XCTAssertEqual(routine.versions.count, 1, "an up-to-date routine doesn't fork")
+        let plannedBefore = original.orderedSections.first?.orderedExercises.first?.effectivePlannedSets.map(\.weight)
 
         RoutineRepository(ctx).updateExerciseDefaults(exerciseId: exercise.id, sets: [(reps: 8, weight: 135)])
         CatalogSyncService(ctx).reconcileRoutine(routine)
+        CatalogSyncService(ctx).reconcileRoutine(routine)
         try ctx.save()
 
+        XCTAssertEqual(routine.versions.count, 2, "one fork, then edits in place")
+        XCTAssertEqual(TestSupport.firstExercise(of: routine).plannedWeight, 135)
+        XCTAssertEqual(original.orderedSections.first?.orderedExercises.first?.effectivePlannedSets.map(\.weight),
+                       plannedBefore)
+    }
+
+    func testReconcileEditsAnUnusedVersionInPlace() throws {
+        let ctx = TestSupport.makeContext()
+        let (routine, exercise, _) = TestSupport.buildRoutine(ctx, weight: 100)
+        RoutineRepository(ctx).updateExerciseDefaults(exerciseId: exercise.id, sets: [(reps: 8, weight: 135)])
+        CatalogSyncService(ctx).reconcileRoutine(routine)
         XCTAssertEqual(routine.versions.count, 1)
         XCTAssertEqual(TestSupport.firstExercise(of: routine).plannedWeight, 135)
     }

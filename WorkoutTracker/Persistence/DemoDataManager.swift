@@ -7,6 +7,12 @@
 //  removes ALL demo-originated data, including demo records the user edited
 //  during QA, while leaving every .user record untouched.
 //
+//  One exception: a REAL workout the user did on a demo routine. It is
+//  tagged demo (sessions take their routine's source), but it is locked
+//  history, so it becomes the user's and is kept. A seeded demo workout is
+//  told apart by its timestamps: SeedDataService starts, logs and finishes it
+//  at one instant, so its start and end times are equal; a real one's never are.
+//
 
 import Foundation
 import SwiftData
@@ -17,7 +23,6 @@ struct DemoDataManager {
 
     init(_ context: ModelContext) { self.context = context }
 
-    private let demoRaw = DataSource.seedDemo.rawValue
 
     /// True if any demo data currently exists.
     func hasDemoData() -> Bool {
@@ -33,6 +38,7 @@ struct DemoDataManager {
     /// delete rules on their parents.
     @discardableResult
     func deleteAllDemoData() -> Int {
+        keepRealWorkouts()
         var deleted = 0
         deleted += deleteDemo(WorkoutSession.self)
         deleted += deleteDemo(Routine.self)
@@ -48,6 +54,48 @@ struct DemoDataManager {
                   summary: "Deleted \(deleted) demo top-level records", source: .user)
         UserDefaults.standard.set(true, forKey: SeedDataService.userDeletedDemoKey)
         return deleted
+    }
+
+    /// Make real workouts done on demo routines the user's own (with their
+    /// corrections and audit events), so the cleanup below leaves them: locked ones with real
+    /// work, and every unfinished one — the seed only makes finished workouts,
+    /// so an unfinished one is the user's, possibly open on screen right now
+    /// (one with nothing done is still discarded by the launch purge).
+    /// Returns how many.
+    @discardableResult
+    func keepRealWorkouts() -> Int {
+        let sessions = (try? context.fetch(FetchDescriptor<WorkoutSession>(
+            predicate: #Predicate { $0.sourceRaw == "seedDemo" && $0.deletedAt == nil }))) ?? []
+        var kept = 0
+        let corrections = (try? context.fetch(FetchDescriptor<WorkoutCorrectionEvent>())) ?? []
+        let audits = (try? context.fetch(FetchDescriptor<AuditEvent>(
+            predicate: #Predicate { $0.sourceRaw == "seedDemo" }))) ?? []
+        for s in sessions where Self.isRealLockedWorkout(s) || !s.isLocked {
+            s.source = .user
+            // By id as well: a restored correction can lack the relationship.
+            for c in corrections where c.workoutSessionId == s.id { c.source = .user }
+            // Its audit trail (started, finished, …) is logged with the
+            // workout's demo source; it goes with the workout, not the demo.
+            // A correction's audit is keyed by the set or exercise corrected.
+            var ids: Set<UUID> = [s.id]
+            for ex in s.exercises { ids.insert(ex.id); ids.formUnion(ex.sets.map(\.id)) }
+            for c in corrections where c.workoutSessionId == s.id { if let t = c.targetEntityId { ids.insert(t) } }
+            for a in audits where a.entityId.map(ids.contains) == true { a.source = .user }
+            kept += 1
+        }
+        if kept > 0 {
+            Audit.log(context, type: "demo.keptWorkouts", entity: "WorkoutSession",
+                      summary: "Kept \(kept) workout(s) done on demo routines as your own", source: .user)
+        }
+        return kept
+    }
+
+    /// Seeded workouts always have both times, equal; anything else with
+    /// work done is real (including one missing a time).
+    static func isRealLockedWorkout(_ s: WorkoutSession) -> Bool {
+        guard s.isLocked, s.hasAnythingDone else { return false }
+        if let start = s.startedAt, let end = s.endedAt { return end != start }
+        return true
     }
 
     /// Generic helper: delete all instances of a model whose source is demo.

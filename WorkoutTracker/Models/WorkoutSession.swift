@@ -64,6 +64,16 @@ final class WorkoutSession {
     var deletedAt: Date?
     /// Set when the session becomes recorded history. Guards immutability.
     var lockedAt: Date?
+    /// The distance unit (DistanceUnit raw value) when the session was
+    /// locked, so its distances keep their unit after Settings changes.
+    /// Empty while unlocked (and on workouts locked before Oct 2026 until
+    /// the launch backfill fills it).
+    var distanceUnitRaw: String = ""
+
+    /// The unit this workout's distances are shown in: frozen once locked.
+    var distanceUnit: String {
+        distanceUnitRaw.isEmpty ? DistanceUnit.current.rawValue : distanceUnitRaw
+    }
 
     var note: String
 
@@ -72,6 +82,14 @@ final class WorkoutSession {
     /// Defaults: 1 minute between exercises, 1 minute between sets.
     var restBetweenExercises: Int = 60
     var restBetweenSets: Int = 60
+    /// Rests per exercise type (TypeRests; additive, so stores upgrade in
+    /// place). Stretching: get-ready inside a stretch / into the next one.
+    var stretchRestWithin: Int = 5
+    var stretchRestBetween: Int = 5
+    /// Cardio between sets; nil = not set yet, so the strength value is used.
+    var cardioRestBetweenSetsOverride: Int?
+    /// Cardio between exercises; 0 = back to back.
+    var cardioRestBetweenExercises: Int = 0
 
     @Relationship(deleteRule: .cascade, inverse: \WorkoutSessionExercise.session)
     var exercises: [WorkoutSessionExercise]
@@ -91,6 +109,15 @@ final class WorkoutSession {
     }
 
     var isLocked: Bool { lockedAt != nil }
+
+    /// True once any set is completed or any set-less exercise (cardio,
+    /// stretch) is marked complete. A workout finished without this is
+    /// discarded, not kept (WorkoutRepository.finishWorkout).
+    var hasAnythingDone: Bool {
+        exercises.flatMap(\.sets).contains(where: \.isCompleted)
+            || exercises.contains { !$0.hasSets && $0.markedCompleteAt != nil }
+            || exercises.contains { ($0.actualDistance ?? 0) > 0 }   // a logged distance
+    }
     var isSoftDeleted: Bool { deletedAt != nil }
 
     var orderedExercises: [WorkoutSessionExercise] {
@@ -210,6 +237,25 @@ final class WorkoutSessionExercise {
     var holdSeconds: Int = 0
     var sides: Int = 1
     var rounds: Int = 1
+    /// Count-based stretch timer per side (seconds); 0 = use the estimate.
+    /// Mirrors `Exercise.countTimerSeconds`.
+    var countTimerSeconds: Int = 0
+
+    // Exercise structure snapshot (Oct 2026), copied from the exercise when
+    // the workout starts. An empty kind = recorded before the structure; the
+    // fields above still describe those.
+    var kindRaw: String = ""
+    var reps: Int = 0
+    /// Planned sets (per side, for a per-side exercise).
+    var setCount: Int = 0
+    var perSideRaw: String = PerSide.single.rawValue
+    var perSideCustom: String = ""
+    var workSeconds: Int = 0
+    var recoverySeconds: Int = 0
+    var effortRaw: String = ""
+    /// Cardio Distance: planned, and what the user logged.
+    var plannedDistance: Double? = nil
+    var actualDistance: Double? = nil
     /// Completion for groups WITHOUT sets (cardio / stretching). Strength uses
     /// per-set completion; this is nil until the user marks the exercise done.
     var markedCompleteAt: Date?
@@ -229,6 +275,66 @@ final class WorkoutSessionExercise {
         get { CardioIntensity(rawValue: intensityRaw) }
         set { intensityRaw = newValue?.rawValue ?? "" }
     }
+    /// Count-based stretch (no hold time — `rounds` is a rep count).
+    var isCountBasedStretch: Bool { holdSeconds == 0 }
+
+    var kind: ExerciseKind? { ExerciseKind(rawValue: kindRaw) }
+    var perSide: PerSide { PerSide(rawValue: perSideRaw) ?? .single }
+    var effort: Intensity? { Intensity(rawValue: effortRaw) }
+    /// The side labels one cycle goes through ([""] = no sides).
+    var sideLabels: [String] { perSide.sides(custom: perSideCustom) }
+
+    /// Copy an exercise's structure fields (kind and what it uses).
+    /// Work is logged on it: a done set, marked complete, or a distance.
+    var hasWorkDone: Bool {
+        sets.contains(where: \.isCompleted) || markedCompleteAt != nil || (actualDistance ?? 0) > 0
+    }
+
+    /// Copy its group's prescription from the exercise: cardio duration and
+    /// intensity; stretching hold, sides, rounds and per-side timer.
+    func snapshotGroupFields(from def: Exercise) {
+        switch sectionType {
+        case .strength:
+            break
+        case .cardio:
+            durationMinutes = def.durationMinutes
+            intensity = def.intensity
+        case .stretching:
+            holdSeconds = def.holdSeconds
+            sides = def.sides
+            rounds = def.rounds
+            countTimerSeconds = def.countTimerSeconds
+        }
+    }
+
+    func snapshotStructure(from def: Exercise) {
+        kindRaw = def.kindRaw
+        reps = def.reps
+        setCount = def.sets
+        perSideRaw = def.perSideRaw
+        perSideCustom = def.perSideCustom
+        workSeconds = def.workSeconds
+        recoverySeconds = def.recoverySeconds
+        effortRaw = def.effortRaw
+        plannedDistance = def.distance
+        if def.kind == .intervals { rounds = def.rounds }
+        if let k = def.kind, k == .hold || k == .staticStretch || k == .dynamicStretch {
+            holdSeconds = k == .dynamicStretch ? 0 : def.holdSeconds
+            countTimerSeconds = def.countTimerSeconds
+        }
+    }
+    var resolvedCountTimerSeconds: Int {
+        StretchTiming.resolvedCountSeconds(stored: countTimerSeconds, reps: rounds)
+    }
+    /// One-line stretch prescription for lists ("Hold 30s · 2 rounds" /
+    /// "10 reps · 2 sides").
+    var stretchSummary: String {
+        if isCountBasedStretch {
+            return "\(rounds) rep\(rounds == 1 ? "" : "s")" + (sides > 1 ? " · \(sides) sides" : "")
+        }
+        return "Hold \(holdSeconds)s · \(rounds) round\(rounds == 1 ? "" : "s")"
+    }
+
     /// Set-based (strength) vs. mark-complete (cardio / stretching).
     var hasSets: Bool { !sets.isEmpty }
 
@@ -324,6 +430,9 @@ final class WorkoutSessionSet {
     // Planned snapshot (never edited after start).
     var plannedWeight: Double
     var plannedReps: Int
+    /// The side this set is for ("Left", "Right"…), for a per-side exercise.
+    /// Empty = not per side.
+    var side: String = ""
 
     // Actuals (editable during the active workout only).
     var actualWeight: Double?

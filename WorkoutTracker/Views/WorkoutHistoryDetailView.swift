@@ -130,19 +130,17 @@ struct WorkoutHistoryDetailView: View {
                     row(s.label, s.displayValue)
                 }
             }
-            // Show the prescription that matches the exercise's group.
-            switch ex.sectionType {
-            case .strength:
+            // Show the prescription that matches the exercise: its sets (any
+            // set-based kind, e.g. Calisthenics in cardio), its kind's fields,
+            // or — for workouts recorded before the structure — its group's.
+            if ex.hasSets || ex.sectionType == .strength {
                 ForEach(ex.orderedSets) { set in
                     setRow(ex, set)
                 }
-            case .cardio:
-                row("Duration", "\(ex.durationMinutes) min")
-                if let i = ex.intensity { row("Intensity", i.displayName) }
-            case .stretching:
-                row("Hold", "\(ex.holdSeconds)s")
-                row("Sides", "\(ex.sides)")
-                row("Rounds", "\(ex.rounds)")
+            } else if let kind = ex.kind {
+                structureRows(ex, kind)
+            } else {
+                legacyRows(ex)
             }
             if !ex.notes.isEmpty { row("Notes", ex.notes) }
         } header: {
@@ -154,6 +152,41 @@ struct WorkoutHistoryDetailView: View {
                 else if ex.isFullyCompleted { Text("Done").foregroundStyle(Theme.statusGreen) }
             }
         }
+    }
+
+    @ViewBuilder
+    private func structureRows(_ ex: WorkoutSessionExercise, _ kind: ExerciseKind) -> some View {
+        let unit = session.distanceUnit
+        switch kind {
+        case .staticStretch, .dynamicStretch:
+            if kind == .staticStretch { row("Hold", "\(ex.holdSeconds)s") }
+            row("Reps", "\(ex.reps)")
+            row("Per side", ex.perSide == .custom ? ex.perSideCustom : ex.perSide.displayName)
+            row("Sets", "\(ex.setCount)")
+        case .intervals:
+            row("Rounds", "\(ex.rounds) (\(ex.workSeconds) s on / \(ex.recoverySeconds) s off)")
+        case .distance:
+            if let p = ex.plannedDistance { row("Distance", "\(p.formatted()) \(unit)") }
+            if let d = ex.actualDistance { row("Done", "\(d.formatted()) \(unit)") }
+        default:
+            row("Duration", "\(ex.durationMinutes) min")
+        }
+        if kind.section == .cardio, let e = ex.effort { row("Intensity", e.displayName) }
+    }
+
+    @ViewBuilder
+    private func legacyRows(_ ex: WorkoutSessionExercise) -> some View {
+            switch ex.sectionType {
+            case .strength:
+                EmptyView()
+            case .cardio:
+                row("Duration", "\(ex.durationMinutes) min")
+                if let i = ex.intensity { row("Intensity", i.displayName) }
+            case .stretching:
+                row("Hold", ex.isCountBasedStretch ? "Untimed (reps)" : "\(ex.holdSeconds)s")
+                row("Sides", "\(ex.sides)")
+                row(ex.isCountBasedStretch ? "Reps" : "Rounds", "\(ex.rounds)")
+            }
     }
 
     private func setRow(_ ex: WorkoutSessionExercise, _ set: WorkoutSessionSet) -> some View {
@@ -168,14 +201,15 @@ struct WorkoutHistoryDetailView: View {
                 Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(set.isCompleted ? Theme.statusGreen : .secondary)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Set \(set.index + 1)")
-                    Text("Planned \(Int(set.plannedWeight)) lb × \(set.plannedReps)")
+                    Text(set.side.isEmpty ? "Set \(set.index / max(1, ex.sideLabels.count) + 1)"
+                                          : "Set \(set.index / max(1, ex.sideLabels.count) + 1) · \(set.side)")
+                    Text("Planned \(Int(set.plannedWeight)) \(WeightUnit.current.rawValue) × \(set.plannedReps)")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     if set.isCompleted {
-                        Text("\(Int(effW ?? 0)) lb × \(effR ?? 0)")
+                        Text("\(Int(effW ?? 0)) \(WeightUnit.current.rawValue) × \(effR ?? 0)")
                             .foregroundStyle(wCorrected || rCorrected ? Theme.statusBlue : .primary)
                         if let delta = Self.deltaText(actualWeight: effW, actualReps: effR,
                                                       plannedWeight: set.plannedWeight, plannedReps: set.plannedReps) {
@@ -225,7 +259,7 @@ struct WorkoutHistoryDetailView: View {
         var parts: [String] = []
         if let w = actualWeight {
             let d = Int(w - plannedWeight)
-            if d != 0 { parts.append("\(d > 0 ? "+" : "")\(d) lb") }
+            if d != 0 { parts.append("\(d > 0 ? "+" : "")\(d) \(WeightUnit.current.rawValue)") }
         }
         if let r = actualReps {
             let d = r - plannedReps
@@ -258,14 +292,16 @@ struct CorrectionSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Stepper("Weight: \(Int(weight)) lb", value: $weight, in: 0...2000, step: 5)
+                    Stepper("Weight: \(Int(weight)) \(WeightUnit.current.rawValue)", value: $weight, in: 0...2000, step: 5)
                     Stepper("Reps: \(reps)", value: $reps, in: 0...100)
                     TextField("Reason (optional)", text: $note)
                 } footer: {
                     Text("Original values are preserved. This adds an append-only correction event.")
                 }
             }
-            .navigationTitle("Correct Set \(set.index + 1)")
+            // The same numbering as the row: once per set, then the side.
+            .navigationTitle("Correct Set \(set.index / max(1, set.exercise?.sideLabels.count ?? 1) + 1)"
+                             + (set.side.isEmpty ? "" : " · \(set.side)"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {

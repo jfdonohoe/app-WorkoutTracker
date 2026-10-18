@@ -8,7 +8,6 @@
 //  once-a-second title update never re-commits it (smooth, ~no CPU).
 //
 //  Used by:
-//   • RestCountdownButton — the between-sets cooldown, inside the exercise sheet.
 //   • RestTimerBar        — the between-exercises rest, on the in-progress screen.
 //
 //  The scrolling barber-pole stripes are preserved (`RestFill.useStripes`) so they
@@ -133,33 +132,5 @@ struct RevealMask: View {
     private func restart() {
         startRestReveal(fill: $fill, endDate: endDate, totalSeconds: totalSeconds,
                         isRunning: isRunning, isFinished: isFinished)
-    }
-}
-
-/// The between-sets rest button: the SAME shape/size as the action button, filled
-/// with the rest countdown. The "Rest m:ss" label is dark ahead of the fill edge
-/// and WHITE where the fill has already been revealed.
-struct RestCountdownButton: View {
-    let title: String
-    let endDate: Date?
-    let totalSeconds: Int
-    let isRunning: Bool
-    var isFinished: Bool = false
-
-    private let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-
-    var body: some View {
-        ZStack {
-            RestFill(endDate: endDate, totalSeconds: totalSeconds, isRunning: isRunning, isFinished: isFinished)
-
-            BigActionLabel(title: title).foregroundStyle(Theme.statusBlack)
-            BigActionLabel(title: title).foregroundStyle(.white)
-                .mask {
-                    RevealMask(endDate: endDate, totalSeconds: totalSeconds, isRunning: isRunning, isFinished: isFinished)
-                }
-        }
-        .frame(maxWidth: .infinity, minHeight: 50)
-        .clipShape(shape)
-        .contentShape(shape)
     }
 }

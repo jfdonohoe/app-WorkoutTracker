@@ -61,4 +61,17 @@ enum TestSupport {
             .first { $0.type == .strength }!
             .orderedExercises.first!
     }
+
+    /// Start and finish a workout with its first set done. A workout finished
+    /// with nothing done is discarded, so this is how tests make history.
+    @discardableResult
+    static func finishWithOneSetDone(_ context: ModelContext, _ routine: Routine) -> WorkoutSession {
+        let workouts = WorkoutRepository(context)
+        let s = workouts.startWorkout(from: routine)
+        if let set = s.exercises.flatMap(\.orderedSets).first {
+            workouts.completeSet(set, in: s, actualWeight: set.plannedWeight, actualReps: set.plannedReps)
+        }
+        workouts.finishWorkout(s)
+        return s
+    }
 }

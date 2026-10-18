@@ -77,6 +77,14 @@ final class RoutineVersion {
     /// Default rest between sets (seconds). Set cooldown is a ROUTINE-level
     /// setting, not part of an exercise's definition. Defaults to 1 minute.
     var defaultRestBetweenSets: Int = 60
+    /// Rests per exercise type (TypeRests; additive, so stores upgrade in
+    /// place). Stretching: get-ready inside a stretch / into the next one.
+    var stretchRestWithin: Int = 5
+    var stretchRestBetween: Int = 5
+    /// Cardio between sets; nil = not set yet, so the strength value is used.
+    var cardioRestBetweenSetsOverride: Int?
+    /// Cardio between exercises; 0 = back to back.
+    var cardioRestBetweenExercises: Int = 0
     var note: String
     var sourceRaw: String
     var createdAt: Date

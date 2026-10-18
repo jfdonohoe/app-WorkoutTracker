@@ -15,7 +15,7 @@
 //  "Add exercise" button adds into THAT group. Groups are keyed by
 //  SessionGroupKey (type + index).
 //
-//  Presented as a sheet from ActiveWorkoutView's "Edit" button.
+//  Presented as a sheet from the workout screen's "Edit" button.
 //
 
 import SwiftUI
@@ -23,6 +23,7 @@ import SwiftData
 
 struct SessionEditorView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.timerCommands) private var timers
     @Environment(\.dismiss) private var dismiss
     @Bindable var session: WorkoutSession
 
@@ -52,8 +53,6 @@ struct SessionEditorView: View {
     var body: some View {
         NavigationStack {
             List {
-                cooldownSection
-
                 // One section per group INSTANCE present, in the chosen order. Each
                 // has its own "Add exercise" and a header menu to move the whole
                 // grouping up/down — like the routine editor.
@@ -71,6 +70,9 @@ struct SessionEditorView: View {
                         groupHeader(key)
                     }
                 }
+
+                // Rests per exercise type, at the bottom.
+                cooldownSection
             }
             .navigationTitle("Edit Workout")
             .navigationBarTitleDisplayMode(.inline)
@@ -91,8 +93,9 @@ struct SessionEditorView: View {
                 }
             }
             .sheet(item: $addTarget) { target in
-                // Only exercises of this grouping's type can be added.
-                ExercisePickerSheet(group: target.type) { exercise in
+                // Only exercises of this grouping's type — and the workout's
+                // demo/user source — can be added.
+                ExercisePickerSheet(group: target.type, source: session.source) { exercise in
                     let groupIndex: Int
                     switch target {
                     case .existing(let key): groupIndex = key.index
@@ -107,19 +110,25 @@ struct SessionEditorView: View {
                                 machineId: ex.machineId,
                                 exerciseId: ex.exerciseId,
                                 defaultRest: session.restBetweenSets,
-                                initialSets: ex.orderedSets.map { ($0.plannedReps, $0.plannedWeight) },
-                                initialRest: ex.plannedRestBetweenSets) { sets, rest in
+                                // Once per set, not per side: a per-side
+                                // exercise repeats each set for every side.
+                                initialSets: ex.orderedSets
+                                    .filter { $0.side == (ex.orderedSets.first?.side ?? "") }
+                                    .map { ($0.plannedReps, $0.plannedWeight) },
+                                initialRest: ex.plannedRestBetweenSets) { sets, rest, _ in
                     // Sets/reps/weight/rest are exercise SETTINGS — write through
                     // to the catalog Exercise (single source of truth) and
                     // reconcile, rather than editing this session's snapshot
                     // directly. Falls back to a session-local edit for an
                     // ad hoc exercise with no catalog link.
                     if let exerciseId = ex.exerciseId {
-                        RoutineRepository(context).updateExerciseDefaults(exerciseId: exerciseId, sets: sets)
+                        RoutineRepository(context).updateExerciseDefaults(exerciseId: exerciseId, machineId: ex.machineId, sets: sets)
+                        // Rest is set per routine, not per exercise; carry the
+                        // sets into the exercise's Reps / Sets / weight.
                         if let def = try? context.fetch(
                             FetchDescriptor<Exercise>(predicate: #Predicate { $0.id == exerciseId })
                         ).first {
-                            def.defaultRest = rest
+                            ExerciseLegacyFields.readBackSets(def, machineId: ex.machineId, context: context)
                             def.updatedAt = .now
                         }
                         CatalogSyncService(context).reconcileExercise(exerciseId)
@@ -155,32 +164,28 @@ struct SessionEditorView: View {
     }
 
     private func subtitle(_ ex: WorkoutSessionExercise) -> String {
+        if ex.kind != nil { return WorkoutPeekSheet.summary(ex) }
         switch ex.sectionType {
         case .strength:
             let n = ex.sets.count
-            return "\(n)×\(ex.orderedSets.first?.plannedReps ?? 0) @ \(Int(ex.orderedSets.first?.plannedWeight ?? 0)) lb"
+            return "\(n)×\(ex.orderedSets.first?.plannedReps ?? 0) @ \(Int(ex.orderedSets.first?.plannedWeight ?? 0)) \(WeightUnit.current.rawValue)"
         case .cardio:
             var s = "\(ex.durationMinutes) min"
             if let i = ex.intensity { s += " · \(i.displayName)" }
             return s
         case .stretching:
-            return "Hold \(ex.holdSeconds)s · \(ex.rounds) round\(ex.rounds == 1 ? "" : "s")"
+            return ex.stretchSummary
         }
     }
 
-    // MARK: - Cooldowns (session-level)
+    // MARK: - Rests (session-level, per exercise type)
 
     private var cooldownSection: some View {
-        Section("Cooldowns") {
-            Stepper("Between exercises: \(session.restBetweenExercises)s",
-                    value: Binding(get: { session.restBetweenExercises },
-                                   set: { session.restBetweenExercises = $0; try? context.save() }),
-                    in: 0...600, step: 15)
-            Stepper("Between sets: \(session.restBetweenSets)s",
-                    value: Binding(get: { session.restBetweenSets },
-                                   set: { session.restBetweenSets = $0; try? context.save() }),
-                    in: 0...600, step: 15)
-        }
+        RestSettingsSections(
+            rests: Binding(get: { session.rests },
+                           set: { WorkoutRepository(context).setRests(session, $0); try? context.save()
+                                  timers.updateRests($0) }),
+            footer: "Rests apply within each type; moving from one type to the next has no rest. Changes here also update the routine for future workouts.")
     }
 
     // MARK: - Group header (title + reorder whole groupings)
@@ -206,16 +211,23 @@ struct SessionEditorView: View {
 
     // MARK: - Mutations
 
+    // A locked workout holds its values forever; these never touch one.
+
     private func removeExercises(_ exercises: [WorkoutSessionExercise], _ offsets: IndexSet) {
+        guard !session.isLocked else { return }
         let groups = session.orderedGroupKeys
         for i in offsets where exercises.indices.contains(i) {
-            context.delete(exercises[i])
+            let ex = exercises[i]
+            session.exercises.removeAll { $0.id == ex.id }   // detach, then delete
+            context.delete(ex)
         }
         renumber(groups: groups)
+        WorkoutRepository(context).recomputeStatus(session)
         try? context.save()
     }
 
     private func moveExercises(_ key: SessionGroupKey, _ offsets: IndexSet, _ dest: Int) {
+        guard !session.isLocked else { return }
         let groups = session.orderedGroupKeys
         var exercises = session.exercises(in: key)
         exercises.move(fromOffsets: offsets, toOffset: dest)
@@ -225,6 +237,7 @@ struct SessionEditorView: View {
 
     /// Move an entire grouping up (-1) or down (+1) among the present groups.
     private func moveGroup(_ key: SessionGroupKey, by delta: Int) {
+        guard !session.isLocked else { return }
         var groups = session.orderedGroupKeys
         guard let idx = groups.firstIndex(of: key) else { return }
         let target = idx + delta

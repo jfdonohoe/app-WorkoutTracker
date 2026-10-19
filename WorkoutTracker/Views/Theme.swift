@@ -2,9 +2,10 @@
 //  Theme.swift
 //  WorkoutTracker
 //
-//  Central color palette — the single source of truth for the app's colors,
-//  mirroring DesignSystem.html. Brand accent, the rest-timer barber-pole
-//  countdown colors, and the warm neutral backgrounds all live here.
+//  Central color palette — the single source of truth for the app's colors.
+//  DesignSystem.html at the repo root is regenerated from this file (last
+//  2026-10-19); change the colors here first. Brand accent, the timer colors,
+//  the status colors and the warm neutral backgrounds all live here.
 //
 //  The palette is light-only, so the app is locked to Light appearance
 //  (INFOPLIST_KEY_UIUserInterfaceStyle in project.yml and the Xcode project);

@@ -265,6 +265,10 @@ final class ImmutabilityAndVersioningTests: XCTestCase {
         repo.updateExerciseDefaults(exerciseId: exercise.id, sets: [(reps: 12, weight: 100),
                                                                      (reps: 10, weight: 110),
                                                                      (reps: 8, weight: 120)])
+        // Distinct values so the snapshot provably copies the row's rest and
+        // ignores the exercise's legacy defaultRest.
+        let re = try XCTUnwrap(routine.activeVersion?.sections.flatMap(\.exercises).first)
+        re.restBetweenSets = 45
         exercise.defaultRest = 75
         CatalogSyncService(ctx).reconcileExercise(exercise.id)
         try ctx.save()
@@ -275,7 +279,29 @@ final class ImmutabilityAndVersioningTests: XCTestCase {
         XCTAssertEqual(sets.count, 3)
         XCTAssertEqual(sets.map { Int($0.plannedWeight) }, [100, 110, 120])
         XCTAssertEqual(sets.map(\.plannedReps), [12, 10, 8])
-        XCTAssertEqual(session.exercises.first?.plannedRestBetweenSets, 75)
+        XCTAssertEqual(session.exercises.first?.plannedRestBetweenSets, 45)
+        // An exercise added mid-workout takes the workout's between-sets rest.
+        let added = try XCTUnwrap(workouts.addUnplannedExercise(to: session, from: exercise))
+        XCTAssertEqual(added.plannedRestBetweenSets, session.restBetweenSets)
+        XCTAssertNotEqual(added.plannedRestBetweenSets, 75)
+    }
+
+    /// Rest lives on the routine (TypeRests), so library sync neither compares
+    /// nor rewrites a routine row's legacy rest — and never forks a version for it.
+    func test18b_syncLeavesRoutineRowRestAlone() throws {
+        let ctx = TestSupport.makeContext()
+        let (routine, exercise, _) = TestSupport.buildRoutine(ctx)
+        let re = try XCTUnwrap(routine.activeVersion?.sections.flatMap(\.exercises).first)
+        re.restBetweenSets = 45
+        exercise.defaultRest = 75
+        try ctx.save()
+        let versionsBefore = routine.versions.count
+
+        CatalogSyncService(ctx).reconcileExercise(exercise.id)
+        try ctx.save()
+
+        XCTAssertEqual(re.restBetweenSets, 45)
+        XCTAssertEqual(routine.versions.count, versionsBefore)
     }
 
     // 19. Finishing a workout records start and end timecodes.

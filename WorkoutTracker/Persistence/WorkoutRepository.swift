@@ -10,8 +10,9 @@
 //  The session never reads live routine data afterward.
 //
 //  Corrections (principle #5): edits to a LOCKED (recorded) session are refused
-//  for direct mutation; callers must use applyCorrection, which appends an event
-//  and never overwrites the original snapshot.
+//  for direct mutation; callers must use CorrectionService (correct /
+//  correctActualWeight / correctActualReps), which appends an event and never
+//  overwrites the original snapshot.
 //
 
 import Foundation
@@ -94,7 +95,7 @@ struct WorkoutRepository {
                                         name: def?.name ?? re.displayName,
                                         sectionType: sectionType,
                                         order: order,
-                                        plannedRestBetweenSets: def?.defaultRest ?? re.restBetweenSets,
+                                        plannedRestBetweenSets: re.restBetweenSets,
                                         notes: def?.notes ?? re.notes)
         se.groupIndex = groupIndex
         context.insert(se)
@@ -203,7 +204,7 @@ struct WorkoutRepository {
                      note: String? = nil,
                      now: Date = .now) {
         guard !session.isLocked else {
-            assertionFailure("Refusing to edit a locked session directly; use applyCorrection.")
+            assertionFailure("Refusing to edit a locked session directly; use CorrectionService.")
             return
         }
         set.actualWeight = actualWeight ?? set.actualWeight ?? set.plannedWeight
@@ -233,7 +234,7 @@ struct WorkoutRepository {
                     weight: Double? = nil,
                     reps: Int? = nil) {
         guard !session.isLocked else {
-            assertionFailure("Locked session — use applyCorrection.")
+            assertionFailure("Locked session — use CorrectionService.")
             return
         }
         if let weight { set.actualWeight = weight }
@@ -415,7 +416,7 @@ struct WorkoutRepository {
                                         name: exercise.name,
                                         sectionType: group,
                                         order: order,
-                                        plannedRestBetweenSets: exercise.defaultRest,
+                                        plannedRestBetweenSets: session.restBetweenSets,
                                         notes: exercise.notes,
                                         isAddedDuringWorkout: true)
         se.groupIndex = groupIndex

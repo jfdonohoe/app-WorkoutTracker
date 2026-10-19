@@ -2,8 +2,10 @@
 //  RoutineListView.swift
 //  WorkoutTracker
 //
-//  Screen 4. Lists routines, supports creating new ones, and soft-deleting
-//  (never hard-deleting) so historical sessions keep resolving.
+//  Screen 4. Lists routines, supports creating new ones, and soft-deletes
+//  here so historical sessions keep resolving. (Only a scratch routine that
+//  no workout ever used is removed outright, from the editor, the Calendar
+//  and the schedule sheet.)
 //
 
 import SwiftUI

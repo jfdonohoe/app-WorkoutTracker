@@ -2,8 +2,10 @@
 //  WorkoutTrackerApp.swift
 //  WorkoutTracker
 //
-//  App entry point. Builds the local-only SwiftData container, seeds demo data
-//  on first launch, and requests notification permission for rest-timer alerts.
+//  App entry point. Builds the local-only SwiftData container, keeps the demo
+//  data seeded until the user has data of their own (SeedDataService
+//  .reconcileDemoData, every launch), runs the launch cleanups, and requests
+//  notification permission for the rest and guided timer alerts.
 //
 
 import SwiftUI

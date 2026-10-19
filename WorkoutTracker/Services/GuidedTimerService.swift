@@ -6,12 +6,15 @@
 //
 //  The user starts the FIRST exercise of a group by hand; from then on this
 //  service walks a precomputed list of phases on its own:
-//   • Cardio:    one work phase per Steady exercise (its full duration),
-//                back to back — no rest after cardio. Intervals: work and
+//   • Cardio:    one work phase per Steady exercise (its full duration);
+//                between two cardio exercises the workout's Rest – Cardio
+//                ▸ Between exercises, when above zero. Intervals: work and
 //                recovery for each round (recovery is part of the exercise).
 //   • Stretches: one work phase per timed hold (rounds × sides) or, for a
 //                count-based stretch, one per side using its per-side timer;
-//                every work phase is separated by a 5 s transition.
+//                work phases are separated by the workout's Rest – Stretching
+//                settings (between sides and sets; between stretches), 5 s
+//                unless changed.
 //
 //  Audio (foreground only):
 //   • the last second of a work phase plays the completion chime;

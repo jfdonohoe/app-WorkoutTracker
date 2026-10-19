@@ -1,7 +1,8 @@
 # XcodeGen spec — FALLBACK ONLY.
 #
 # A ready-to-open WorkoutTracker.xcodeproj is already committed in this folder.
-# Just double-click it in Xcode 16+ and Run (Cmd-R).
+# Just double-click it in Xcode 26 or later and Run (Cmd-R). (RootView uses an
+# iOS 26 SDK API behind #available; the deployment target stays iOS 17.)
 #
 # If the .xcodeproj ever fails to open on your machine, you can regenerate it:
 #   brew install xcodegen

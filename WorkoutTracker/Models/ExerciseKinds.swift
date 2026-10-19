@@ -173,7 +173,10 @@ enum PickRange {
     static let sets = 1...10
     static let rounds = 1...20
     /// Machine and cardio setting values; anything else is Custom… text.
-    static let settingValue = 1...20
+    /// The same range as the in-workout pickers and the CSV importers
+    /// (`MachineSettingDefinition.valueRange`), so a value set in the editor
+    /// can always be shown and imported.
+    static let settingValue = MachineSettingDefinition.valueRange
 }
 
 /// Weight unit, set once in Settings. Switching changes the label only;

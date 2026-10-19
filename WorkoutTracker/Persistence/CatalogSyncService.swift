@@ -79,8 +79,10 @@ struct CatalogSyncService {
                     // on the exercise's default (first) machine, and the user
                     // switches during the workout if it's taken.
                     re.machineId = exercise.machineId
+                    // Rest is the routine's (TypeRests), not the exercise's:
+                    // the row keeps whatever it has.
                     routineRepo.setPlannedSets(re, sets: exercise.defaultSets(for: re.machineId),
-                                               restBetweenSets: exercise.defaultRest)
+                                               restBetweenSets: re.restBetweenSets)
                 }
             }
         }
@@ -95,7 +97,6 @@ struct CatalogSyncService {
         return re.displayName != exercise.name
             || re.notes != exercise.notes
             || re.machineId != exercise.machineId
-            || re.restBetweenSets != exercise.defaultRest
             || re.setCount != target.count
             || planned.count != target.count
             || zip(planned, target).contains { $0.plannedReps != $1.reps || $0.plannedWeight != $1.weight }
@@ -115,7 +116,6 @@ struct CatalogSyncService {
         for se in unlockedSessionExercises(where: { $0.exerciseId == exerciseId }) {
             guard let session = se.session, !session.isLocked else { continue }
             se.notes = exercise.notes
-            se.plannedRestBetweenSets = exercise.defaultRest
             // Once work is logged, the machine it was done on and the shape it
             // was done in (kind, sides, reps) are part of the record: only the
             // sets not yet done are re-planned below.

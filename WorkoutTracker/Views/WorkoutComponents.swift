@@ -2,9 +2,10 @@
 //  WorkoutComponents.swift
 //  WorkoutTracker
 //
-//  Reusable pieces for the active-workout flow: the rest-timer bar (Screen 3),
-//  the add-unplanned-exercise sheet, and the machine-setting edit sheet with the
-//  "this workout only / future default" choice.
+//  Reusable pieces for the active-workout flow: TextPromptSheet, BigActionLabel,
+//  RestTimerBar (the between-exercises rest on the in-progress screen),
+//  MachineSettingEditSheet (edits the machine's shared default) and
+//  WorkoutCompletePrompt.
 //
 
 import SwiftUI

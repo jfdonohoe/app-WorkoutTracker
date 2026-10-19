@@ -371,7 +371,7 @@ struct DataIntegrityService {
                 + abandonedOpen.map { Self.workoutIssue($0, "Marked abandoned but still open", fixes: Self.openFixes($0)) }
                 + noStart.map { Self.workoutIssue($0, "Started, but no start time", fixes: [.setStartTime($0.id)], idSuffix: "-start") }))
 
-        // 12. Demo and user data never mix. A routine only uses exercises of
+        // 11. Demo and user data never mix. A routine only uses exercises of
         //     its own source, an exercise only machines of its own source, and
         //     a workout in progress only exercises of its own source; the
         //     exercise picker and editors enforce this (ExercisePickerSheet).
@@ -413,7 +413,7 @@ struct DataIntegrityService {
             guidance: "The app no longer lets demo and your data mix; these come from earlier versions. Replace the demo exercise with one of your own in the routine, then delete demo data.",
             issues: mixIssues))
 
-        // 11. The audit log is intact: events are well-formed, none are dated
+        // 12. The audit log is intact: events are well-formed, none are dated
         //     in the future, and every finished workout that the log knows
         //     about has its session.finished event (WorkoutRepository
         //     .finishWorkout). Workouts with no events at all are skipped:
@@ -510,9 +510,10 @@ struct DataSafetyRepair {
 
     init(_ context: ModelContext) { self.context = context }
 
-    /// The repairs that need no decision — checks 1, 6 and 8. Run at launch,
-    /// after every import, and from the check screen's Fix button. Safe to
-    /// repeat. Returns the number of records changed.
+    /// The repairs that need no decision — checks 1, 6 and 8. Run after every
+    /// import and from the check screen's Fix button (not at launch: an import
+    /// is the only way these problems arrive). Safe to repeat. Returns the
+    /// number of records changed.
     @discardableResult
     func autoRepair() -> Int {
         var changed = lockFinishedWorkouts()

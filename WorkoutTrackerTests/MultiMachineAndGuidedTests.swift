@@ -305,6 +305,9 @@ final class MultiMachineAndGuidedTests: XCTestCase {
     func testSettingValuesStartAtZero() {
         XCTAssertEqual(MachineSettingDefinition.valueRange.lowerBound, 0)
         XCTAssertEqual(MachineSettingDefinition.valueRange.upperBound, 15)
+        // The exercise editor's pick list is the same range, so a value set
+        // there can always be shown by the in-workout pickers and imported.
+        XCTAssertEqual(PickRange.settingValue, MachineSettingDefinition.valueRange)
     }
 
     func testDemoAutoSeedOptOut() {

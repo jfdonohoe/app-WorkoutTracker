@@ -202,13 +202,15 @@ final class Exercise {
     /// (strength / cardio / stretching / …). Stored as a stable raw string.
     var defaultSectionTypeRaw: String = SectionType.strength.rawValue
     /// Optional reference photo for the exercise definition. Stored externally
-    /// so the database stays small. (Strength & cardio only.)
+    /// so the database stays small.
     @Attribute(.externalStorage) var photoData: Data?
     /// The photo was picked or taken in the app. A sheet import never replaces
     /// it; any other photo is re-fetched from the row's photo_url on import
     /// and replaced when the image there has changed. Additive (lightweight).
     var photoSetInApp: Bool = false
-    /// Default cooldown between sets (seconds) when added to a routine. (Strength.)
+    /// Legacy per-exercise rest (seconds). Nothing reads it any more: rest is
+    /// set per routine and per workout (`TypeRests`). Kept so existing stores
+    /// and older backups still load.
     var defaultRest: Int = 90
 
     // Cardio-group attributes.

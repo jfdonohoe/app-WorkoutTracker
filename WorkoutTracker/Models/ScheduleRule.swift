@@ -2,10 +2,10 @@
 //  ScheduleRule.swift
 //  WorkoutTracker
 //
-//  RRULE-compatible recurrence stored from v1. The MVP UI only exposes simple
-//  options (a weekday, "every N days/weeks"), but the model captures a full
-//  RRULE string plus structured fields so richer recurrence editing can be
-//  added later WITHOUT a data migration.
+//  RRULE-compatible recurrence stored from v1. The UI (ScheduleWorkoutSheet,
+//  RecurrenceEditor) exposes daily, weekly and monthly rules with an interval,
+//  weekdays, an until date and a count; the model stores the full RRULE string
+//  plus structured fields so further RRULE features need no data migration.
 //
 
 import Foundation

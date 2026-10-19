@@ -3,19 +3,18 @@
 //  WorkoutTracker
 //
 //  The per-exercise logging modal. Behavior:
-//   • Machine settings and cooldown are STATIC text by default; an Edit toggle
-//     turns on adjustment.
+//   • The sheet is titled by the exercise's type (Strength / Cardio /
+//     Stretching); the exercise name heads the first section.
+//   • Machine settings are STATIC text by default; an Edit toggle turns on
+//     adjustment. An exercise with more than one machine gets a machine menu.
 //   • Only the "active" set (the first not-yet-completed set, with all earlier
 //     sets complete) shows the working controls. Upcoming sets show no Complete
 //     button.
 //   • Completing a set collapses it to a one-line row (weight × reps + check) and
 //     scrolls down to the next set. Tapping a completed row reopens it to edit.
-//   • The Complete-Set button slot doubles as the rest timer: it keeps the SAME
-//     prominent-button shape throughout. While resting it shows a countdown with
-//     the accent fill revealed left-to-right over a darker track; when the timer
-//     expires or is skipped it morphs into the functional Complete Set button.
-//
-//  Title is just the exercise name — no dropdown.
+//   • Rest between sets and between exercises runs in the card as a ring
+//     (RestRingTimer, InCardTimers.swift) using the workout's TypeRests; when it
+//     ends or is skipped the Complete Set button returns.
 //
 
 import SwiftUI

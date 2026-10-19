@@ -18,7 +18,7 @@
 //      can use a `.lightweight` stage.
 //   4. If a transform is unavoidable, use a `.custom` stage with willMigrate to
 //      back up affected rows, and assert counts in didMigrate. Add a test in
-//      MigrationSafetyTests proving session counts and ids are preserved.
+//      MigrationIntegrityTests proving session counts and ids are preserved.
 //
 
 import Foundation

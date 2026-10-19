@@ -3,8 +3,11 @@
 //  WorkoutTracker
 //
 //  Screen 9. JSON backup export (via the share sheet) and non-destructive
-//  import. Import only ADDS records whose ids don't already exist; it never
-//  overwrites existing data.
+//  import. Import adds records whose ids don't already exist and never
+//  overwrites an existing one; afterwards the merged store gets the same
+//  cleanups as launch (routine rows for exercises not in the library,
+//  duplicate planned sets, discarded workouts) and the automatic data-safety
+//  repairs (ExportImportService.restore).
 //
 
 import SwiftUI
@@ -160,7 +163,7 @@ struct ImportExportView: View {
             } header: {
                 Text("Import")
             } footer: {
-                Text("Safe import: existing records are kept as-is. Only new records are added — nothing is overwritten.")
+                Text("Safe import: existing records are kept as-is and only new records are added. Afterwards the usual cleanups and automatic data-safety repairs run on the result.")
             }
 
             Section {
@@ -226,7 +229,7 @@ struct ImportExportView: View {
             } header: {
                 Text("Routines from CSV")
             } footer: {
-                Text("Builds routines (and any exercises they reference) from a CSV file. A routine that already exists (by name) is updated only if its sections or exercises differ — in a new version if a workout was started from it, so past workouts never change. Routines not in the file are left alone, and existing exercises are reused. A routine is just a definition; scheduling is done separately from the Calendar and Workout tabs. Always required: routine, exercise. group is needed only for an exercise that isn't in your library or given a group or kind elsewhere in this file, or is in more than one group. order (1, 2, 3…) sets each row's place in its routine; fill it on every row of a routine or on none (none keeps file order). Each run of rows in the same group becomes a section, so a group can come more than once (e.g. stretching before and after strength). For a new exercise, kind and its columns (as in the exercise templates) describe it; an exercise already in your library keeps its saved values. machine_settings uses Label=Value; Label2=Value2. setK_reps/setK_weight (up to 15) and set_cooldown (seconds between sets) plan this routine's sets and rest on import only: routines follow the library, so the exercise's own sets and rest replace them when the Routines, Workout or Calendar tab next appears. To change them for good, change the exercise. exercise_cooldown = rest between exercises for the routine (if rows differ, the largest is used). A malformed row blocks the whole import.")
+                Text("Builds routines (and any exercises they reference) from a CSV file. A routine that already exists (by name) is updated only if its sections or exercises differ — in a new version if a workout was started from it, so past workouts never change. Routines not in the file are left alone, and existing exercises are reused. A routine is just a definition; scheduling is done separately from the Calendar and Workout tabs. Always required: routine, exercise. group is needed only for an exercise that isn't in your library or given a group or kind elsewhere in this file, or is in more than one group. order (1, 2, 3…) sets each row's place in its routine; fill it on every row of a routine or on none (none keeps file order). Each run of rows in the same group becomes a section, so a group can come more than once (e.g. stretching before and after strength). For a new exercise, kind and its columns (as in the exercise templates) describe it; an exercise already in your library keeps its saved values. machine_settings uses Label=Value; Label2=Value2. setK_reps/setK_weight (as many pairs as the header has) plan this routine's sets on import only: routines follow the library, so the exercise's own sets replace them when the Routines, Workout or Calendar tab next appears. To change them for good, change the exercise. set_cooldown is kept with the row but rest between sets comes from the routine's Rest settings. exercise_cooldown = rest between exercises for the routine (if rows differ, the largest is used). A malformed row blocks the whole import.")
             }
         }
         .navigationTitle("Import / Export")

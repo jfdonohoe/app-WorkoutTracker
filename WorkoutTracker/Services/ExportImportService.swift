@@ -16,8 +16,10 @@ import SwiftData
 
 struct BackupDocument: Codable {
     /// 4: the exercise structure (kind and its fields; machine weight; the
-    /// workout's copy of them; each set's side). Per-exercise rest is no
-    /// longer written — rest is set per routine.
+    /// workout's copy of them; each set's side). An exercise's own rest is no
+    /// longer written — rest is set per routine and per workout (TypeRests);
+    /// the routine-row and workout-row rest fields are still carried for
+    /// older data.
     var formatVersion: Int = 4
     var exportedAt: Date = .now
 

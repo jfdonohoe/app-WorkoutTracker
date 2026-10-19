@@ -30,15 +30,15 @@
 //  of a routine run in that order, and each run of consecutive rows with the
 //  same group is one section, so a group can appear more than once (e.g.
 //  stretching before and after strength).
-//  Optional cooldowns (seconds): set_cooldown = rest between sets for THAT
-//  exercise (blank → routine default); exercise_cooldown = rest between exercises
-//  for the routine (one routine-level value; if rows differ, the largest is used).
+//  Optional cooldowns (seconds): exercise_cooldown = rest between exercises
+//  for the routine (one routine-level value; if rows differ, the largest is
+//  used). set_cooldown is stored on the routine's exercise row but no timer
+//  reads it: rest between sets is the routine's Rest – Strength setting.
 //  Routines follow the library (CatalogSyncService.reconcileRoutineExercises):
-//  setK_reps/setK_weight and set_cooldown are written to the routine on import
-//  but replaced by the exercise's own sets and rest the next time the Routines,
-//  Workout or Calendar tab appears. set_cooldown never reaches the exercise, and
-//  setK becomes the exercise's library defaults only on the no-`kind` strength
-//  path in exercise(for:). To set them for good, change the exercise.
+//  setK_reps/setK_weight are written to the routine on import but replaced by
+//  the exercise's own sets the next time the Routines, Workout or Calendar tab
+//  appears. setK becomes the exercise's library defaults only on the no-`kind`
+//  strength path in exercise(for:). To set them for good, change the exercise.
 //  Required per group:
 //      • strength    → per-set columns are OPTIONAL; if blank, the exercise's own
 //                       default sets (from the library) are used. Each filled setK

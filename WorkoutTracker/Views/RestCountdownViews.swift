@@ -2,16 +2,15 @@
 //  RestCountdownViews.swift
 //  WorkoutTracker
 //
-//  Shared rest-countdown visuals: a faint container with a solid olive (#6E7A3F)
-//  fill revealed left→right over the remaining time. The reveal is a single
-//  Core Animation, committed once from the timer's absolute `endDate`, so the
-//  once-a-second title update never re-commits it (smooth, ~no CPU).
+//  Rest-countdown visuals: a faint container (Theme.timerContainer) with a
+//  Theme.stripeA fill revealed left→right over the remaining time. The reveal
+//  is a single Core Animation, committed once from the timer's absolute
+//  `endDate`, so the once-a-second title update never re-commits it.
 //
-//  Used by:
-//   • RestTimerBar        — the between-exercises rest, on the in-progress screen.
-//
-//  The scrolling barber-pole stripes are preserved (`RestFill.useStripes`) so they
-//  can be swapped back in later.
+//  Not used by any screen at present: RestTimerBar (WorkoutComponents.swift)
+//  draws its own progress-driven reveal and the exercise card uses
+//  RestRingTimer (InCardTimers.swift). Kept for the barber-pole variant
+//  (`RestFill.useStripes`).
 //
 
 import SwiftUI
@@ -91,7 +90,7 @@ struct RestFill: View {
 
     @ViewBuilder
     private func revealedFill(geo: GeometryProxy) -> some View {
-        if useStripes { barberStripes(geo: geo) } else { Theme.stripeA }   // solid olive #6E7A3F
+        if useStripes { barberStripes(geo: geo) } else { Theme.stripeA }   // solid timer fill (#75B798)
     }
 
     /// Barber-pole stripes — pale base with scrolling olive bands. Kept available

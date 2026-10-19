@@ -51,7 +51,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Workout")
                 } footer: {
-                    Text("Timer sounds: the countdown beeps and chimes (vibrations still play). Auto progress through stretches: when a stretch ends, the next one starts after a 5-second get-ready. Off: the timer stops after each stretch.")
+                    Text("Timer sounds: the countdown beeps and chimes (vibrations still play). Auto progress through stretches: when a stretch ends, the next one starts after the workout's Between stretches rest (taken from the routine; 5 seconds unless changed). Off: the timer stops after each stretch.")
                 }
 
                 Section("Backup") {

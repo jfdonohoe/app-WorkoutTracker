@@ -24,8 +24,9 @@ final class Routine {
     var deletedAt: Date?
 
     /// All versions of this routine, newest-highest versionNumber.
-    /// Cascade deletes versions IF the routine itself is ever hard-deleted —
-    /// which only happens for demo cleanup. Real user routines are soft-deleted.
+    /// Cascade deletes versions IF the routine itself is ever hard-deleted:
+    /// demo cleanup, or a scratch routine no workout ever used (RoutineEditorView,
+    /// CalendarView, ScheduleWorkoutSheet). Routines with history are soft-deleted.
     @Relationship(deleteRule: .cascade, inverse: \RoutineVersion.routine)
     var versions: [RoutineVersion]
 
@@ -177,9 +178,9 @@ final class RoutineExercise {
     /// Summary fields. `setCount`/`plannedWeight`/`plannedReps` describe the
     /// prescription at a glance and act as a fallback when no per-set rows exist.
     var setCount: Int
-    var plannedWeight: Double   // pounds only
+    var plannedWeight: Double   // as entered; the unit (WeightUnit) is a label, numbers are never converted
     var plannedReps: Int        // exact reps only
-    var restBetweenSets: Int    // seconds (cooldown between sets)
+    var restBetweenSets: Int    // seconds; legacy per-exercise rest, kept for storage — timers read the version's TypeRests
     var notes: String
     var targetEffortRaw: String?
 

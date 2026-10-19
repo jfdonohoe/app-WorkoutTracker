@@ -78,9 +78,9 @@ A rest timer becomes part of the completion interaction rather than a separate m
 
 ### Complete
 
-Finishing a workout creates a historical snapshot.
+Starting a workout copies the routine version and the machine settings into the session. Finishing locks that copy as history.
 
-From that point forward, changes to the underlying routine do not alter the completed session.
+From that point forward, changes to the underlying routine do not alter the session.
 
 ### Review
 
@@ -130,17 +130,28 @@ Several behaviors reinforce that principle.
 
 | Product principle | System behavior |
 |---|---|
-| Completed sessions should not change | Completed sessions are locked |
+| Finished sessions should not change | Every finished session is locked, not only completed ones |
 | Routine edits should affect the future | Edits create new routine versions |
 | History should reflect what was planned then | Sessions retain independent snapshots |
 | Corrections should be transparent | Corrections are append-only |
 | Removing something should not destroy history | User-facing deletion is soft deletion |
-| App upgrades should not erase activity | Persistence uses explicit versioned migrations |
+| App upgrades should not erase activity | Persistence pins a versioned schema and a migration plan; every change so far has been additive |
 | Demo content should never contaminate real history | Demo-origin data remains identifiable |
 
 The point is not simply data integrity.
 
 It is **product trust**.
+
+Code comments cite these rules by number:
+
+1. Finishing a workout locks the session permanently.
+2. A session references its routine version by id, and a version a session points to is never mutated.
+3. Routines are versioned: a stable identity whose content lives in version snapshots.
+4. Catalog deletes are soft, so history keeps resolving.
+5. Corrections are append-only events layered over the original.
+6. A record's source (user or demo) is set once and never changes with editing. The one deliberate exception: a real workout done on a demo routine becomes the user's, so demo cleanup keeps it.
+7. Demo cleanup never touches user records.
+8. Migration safety: a pinned schema and migration plan, and a store that fails to open is reported, never deleted.
 
 A workout history becomes useful only if the user can believe that it still represents what actually happened.
 
@@ -190,16 +201,16 @@ The current MVP includes:
 - Rest Timer
 - Routine List
 - Routine Editor
-- Exercise and Machine Editor
+- Exercise Editor (machines are edited inside it)
 - Calendar
 - Workout History
 - Import / Export
 - Demo Data
-- Data Safety Check
+- Data Safety Check (opened from Import / Export when a check needs attention)
 
-The app is intentionally local-first and offline-only.
+The app is intentionally local-first.
 
-There is currently no account system, server, or iCloud dependency.
+There is no account system, server, or iCloud dependency. The only network use is opt-in: importing a shared Google Sheet, and fetching exercise photos from the `photo_url` column of a CSV or sheet import.
 
 ---
 
@@ -208,7 +219,6 @@ There is currently no account system, server, or iCloud dependency.
 Some capabilities were deliberately deferred rather than added to the initial product:
 
 - progression recommendations
-- richer recurrence editing
 - monthly statistics
 - machine groupings
 - multiple gym locations in the UI
@@ -228,11 +238,11 @@ Workout Tracker is a native iPhone application built with:
 
 - SwiftUI
 - SwiftData
-- versioned schemas and migrations
-- repository-based data mutation
+- a pinned versioned schema and migration plan
+- repository-based data mutation for history
 - local notifications
 - RRULE schedule expansion
-- local import / export
+- local backup import / export, CSV import and Google Sheet import
 
 The codebase separates product state, persistence, services, and presentation:
 
@@ -247,7 +257,7 @@ WorkoutTracker/
 WorkoutTrackerTests/
 ```
 
-Views read product state but do not directly own persistence behavior. Rules such as historical immutability and versioning live in a centralized data layer so they can be tested independently of the UI.
+Rules such as historical immutability, snapshotting and corrections live in a centralized data layer (`WorkoutRepository`, `CorrectionService`) so they can be tested independently of the UI. Views still insert and delete catalog and schedule records directly; only history is fenced off behind the repositories.
 
 ---
 
@@ -262,4 +272,4 @@ Tests verify that:
 - old sessions retain their original versions
 - corrections do not overwrite original values
 - deleting demo content does not remove user data
--
+- backups round-trip every record, including corrections and the audit log

@@ -59,8 +59,10 @@ final class WorkoutSession {
 
     var createdAt: Date
     var updatedAt: Date
-    /// Soft-delete marker. Only used for demo cleanup; user history is never
-    /// surfaced for deletion in the UI.
+    /// Soft-delete marker. Set by demo cleanup, by the user's "Delete
+    /// workout" (WorkoutRepository.softDeleteSession, from the history detail
+    /// and the Workout tab) and by the Data Safety Check's delete fix. The
+    /// record stays in the store.
     var deletedAt: Date?
     /// Set when the session becomes recorded history. Guards immutability.
     var lockedAt: Date?
@@ -220,6 +222,7 @@ final class WorkoutSessionExercise {
     /// Defaults to 0, so existing data is one group per type.
     var groupIndex: Int = 0
     var order: Int
+    /// Legacy per-exercise rest, kept for storage; timers read `session.rests`.
     var plannedRestBetweenSets: Int
     var notes: String
     /// True if the user added this exercise spontaneously during the workout.
@@ -427,7 +430,8 @@ final class WorkoutSessionSet {
     var exercise: WorkoutSessionExercise?
     var index: Int
 
-    // Planned snapshot (never edited after start).
+    // Planned snapshot. Never edited once the session is locked; until then
+    // library sync may re-plan sets not yet done (CatalogSyncService).
     var plannedWeight: Double
     var plannedReps: Int
     /// The side this set is for ("Left", "Right"…), for a per-side exercise.

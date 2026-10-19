@@ -5,7 +5,7 @@ Every fixed bug, the shape its fix must keep, and the test that pins it. `regres
 - **When a pinning test is renamed:** update the row.
 - **After each full run:** update the test count.
 
-**Last full run:** 2026-10-18, after the O-012/O-014 decisions (regression-reviewer: PASS): 307 tests, 307 passed, 0 failed, 0 skipped (306 before, plus the R-169 pin).
+**Last full run:** 2026-10-19, the wiki discrepancy close-out (regression-reviewer: PASS on the working tree, then the suite rerun after test18 was strengthened): 308 tests, 308 passed, 0 failed, 0 skipped (307 before, plus the R-170 pin test18b).
 
 **Conventions:**
 - Locations are relative to `WorkoutTracker/`. Tests are in `WorkoutTrackerTests/`.
@@ -182,6 +182,8 @@ Every fixed bug, the shape its fix must keep, and the test that pins it. `regres
 | R-167 | Library sync checks a routine exercise's version is active before comparing it, so old versions cost no planned-set loads | Persistence/CatalogSyncService.swift `reconcileRoutineExercises` | outcome only: CatalogSyncTests | fixed | 2026-10-18 split audit (O-013) |
 | R-168 | The Calendar weekday header starts on the calendar's first weekday, like the grid | Views/CalendarView.swift `weekdaySymbols(for:)` | SplitAuditFixesTests › testWeekdayHeaderStartsOnTheCalendarsFirstWeekday | fixed | 2026-10-18 split audit (O-015) |
 | R-169 | The app is locked to Light appearance (`UIUserInterfaceStyle = Light`), because the palette in Theme.swift is light-only | project.yml; WorkoutTracker.xcodeproj/project.pbxproj (both app configurations) | SplitAuditFixesTests › testAppIsLockedToLightAppearance | fixed | 2026-10-18 split audit (O-014) |
+| R-170 | Library sync neither compares nor rewrites a routine row's legacy rest (rest is the routine's / workout's TypeRests), so it never forks a version for a rest difference; workout snapshots copy the row's rest, an exercise added mid-workout takes the workout's rest, and `Exercise.defaultRest` is ignored | Persistence/CatalogSyncService.swift `isStale`, `reconcileRoutineExercises`, `reconcileSessionExercises`; Persistence/WorkoutRepository.swift `startWorkout`, `addUnplannedExercise` | ImmutabilityAndVersioningTests › test18b_syncLeavesRoutineRowRestAlone (sync); › test18_perSetPlannedSnapshot (snapshot: row rest 45 vs defaultRest 75; added exercise) | fixed | 2026-10-19 wiki discrepancy close-out |
+| R-171 | The exercise editor's setting pick list is the same range as the in-workout pickers and the CSV importers (`PickRange.settingValue` is `MachineSettingDefinition.valueRange`, 0...15) | Models/ExerciseKinds.swift `PickRange.settingValue`; Models/Catalog.swift `MachineSettingDefinition.valueRange` | MultiMachineAndGuidedTests › testSettingValuesStartAtZero | fixed | 2026-10-19 wiki discrepancy close-out |
 
 **Tests found on the first run that pin product rules but aren't tied to a row:** `ImmutabilityAndVersioningTests › test11_correctionsAppendOnly`, `› test12_softDeleteKeepsHistory`, `MigrationIntegrityTests › test17_migrationPlanIsSafe`, `DemoExportImportTests › test14_userDataRemainsAfterDemoDeletion`, `ImmutabilityAndVersioningTests › test07_catalogEditUpdatesRoutineInANewVersion`.
 
@@ -215,4 +217,4 @@ Known bugs, not fixed. Don't report these as regressions. When one is fixed, mov
 | A-001 | `removeDuplicatePlannedSets` edits old routine versions that past workouts point to | 2026-10-16-data-safety-repairs |
 | A-002 | Sheet import overwrites routine sets that a workout recorded differently (the workout keeps its own record) | 2026-10-17-google-sheet-one-tap-import (#7) |
 | A-003 | Google Sheet import relies on the undocumented htmlview page and needs "Anyone with the link" sharing | 2026-10-16-google-sheet-import |
-| A-004 | A routine CSV's `setK`/`set_cooldown` for an exercise already in the library last only until the next library sync, when a Routines/Workout/Calendar tab appears (`CatalogSyncService.isStale` compares count, reps, weight and rest); `set_cooldown` never reaches `Exercise.defaultRest`, and setK becomes library defaults only on the no-`kind` strength path. The importer header and the Import footer say so | 2026-10-18-split-vs-broad-audit (O-012), decided 2026-10-18 |
+| A-004 | A routine CSV's `setK` for an exercise already in the library lasts only until the next library sync, when a Routines/Workout/Calendar tab appears (`CatalogSyncService.isStale` compares count, reps and weight). `set_cooldown` is stored on the routine's exercise row but no timer reads it: rest between sets is the routine's Rest – Strength setting (TypeRests). The importer header and the Import footer say so | 2026-10-18-split-vs-broad-audit (O-012), decided 2026-10-18; rest wording revised 2026-10-19 |

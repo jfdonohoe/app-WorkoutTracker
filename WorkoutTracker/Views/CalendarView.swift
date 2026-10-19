@@ -3,7 +3,7 @@
 //  WorkoutTracker
 //
 //  Screen 7. A month grid marking past workouts (completed / partial / missed /
-//  abandoned) and future scheduled days. Selecting a day shows its detail and arun 
+//  abandoned) and future scheduled days. Selecting a day shows its detail and a
 //  link to the read-only history. Future sessions are NOT created here — only
 //  when the user actually starts one (per spec).
 //

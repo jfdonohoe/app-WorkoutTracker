@@ -37,3 +37,4 @@ fastlane/test_output/
 .claude/*
 !.claude/agents/
 !.claude/hooks/
+!.claude/agent-context.md
